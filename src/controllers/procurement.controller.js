@@ -142,46 +142,54 @@ export const completeRequest = async (req, res) => {
   }
 };
 
-/* ================= UPLOAD PROOF (UPDATED) ================= */
+/* ================= UPLOAD PROOF ================= */
 
 export const uploadProof = async (req, res) => {
   try {
+    /* ===== VALIDATION ===== */
+
     if (!req.file) {
-      throw {
-        statusCode: 400,
+      return res.status(400).json({
+        success: false,
         message: 'File is required',
         code: 'FILE_REQUIRED',
-      };
+      });
     }
 
     const requestId = Number(req.body.requestId);
+
     if (!requestId || Number.isNaN(requestId)) {
-      throw {
-        statusCode: 400,
+      return res.status(400).json({
+        success: false,
         message: 'Valid requestId is required',
         code: 'INVALID_REQUEST_ID',
-      };
+      });
     }
 
-    if (!req.body.type) {
-      throw {
-        statusCode: 400,
+    const { type, description } = req.body;
+
+    if (!type) {
+      return res.status(400).json({
+        success: false,
         message: 'Proof type is required',
         code: 'TYPE_REQUIRED',
-      };
+      });
     }
 
-    // ✅ CENTRALIZED UPLOAD
+    /* ===== CLOUDINARY UPLOAD ===== */
+
     const fileUrl = await uploadToCloudinary(
       req.file,
       process.env.CLOUDINARY_PROCUREMENT_FOLDER,
-      'auto'
+      'auto' // important for PDF support
     );
+
+    /* ===== SAVE TO DATABASE ===== */
 
     const payload = {
       requestId,
-      type: req.body.type,
-      description: req.body.description || null,
+      type,
+      description: description || null,
       fileUrl,
     };
 
@@ -190,13 +198,21 @@ export const uploadProof = async (req, res) => {
       req.user.id
     );
 
-    return sendSuccess(res, 201, {
+    /* ===== RESPONSE ===== */
+
+    return res.status(201).json({
+      success: true,
       message: 'Proof uploaded successfully',
       data,
     });
+
   } catch (error) {
     console.error('UPLOAD PROOF ERROR:', error);
-    return sendError(res, error);
+
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to upload proof',
+    });
   }
 };
 
