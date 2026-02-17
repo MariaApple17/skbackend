@@ -142,54 +142,46 @@ export const completeRequest = async (req, res) => {
   }
 };
 
-/* ================= UPLOAD PROOF ================= */
+/* ================= UPLOAD PROOF (UPDATED) ================= */
 
 export const uploadProof = async (req, res) => {
   try {
-    /* ===== VALIDATION ===== */
-
     if (!req.file) {
-      return res.status(400).json({
-        success: false,
+      throw {
+        statusCode: 400,
         message: 'File is required',
         code: 'FILE_REQUIRED',
-      });
+      };
     }
 
     const requestId = Number(req.body.requestId);
-
     if (!requestId || Number.isNaN(requestId)) {
-      return res.status(400).json({
-        success: false,
+      throw {
+        statusCode: 400,
         message: 'Valid requestId is required',
         code: 'INVALID_REQUEST_ID',
-      });
+      };
     }
 
-    const { type, description } = req.body;
-
-    if (!type) {
-      return res.status(400).json({
-        success: false,
+    if (!req.body.type) {
+      throw {
+        statusCode: 400,
         message: 'Proof type is required',
         code: 'TYPE_REQUIRED',
-      });
+      };
     }
 
-    /* ===== CLOUDINARY UPLOAD ===== */
-
+    // ✅ CENTRALIZED UPLOAD
     const fileUrl = await uploadToCloudinary(
       req.file,
       process.env.CLOUDINARY_PROCUREMENT_FOLDER,
-      'auto' // important for PDF support
+      'auto'
     );
-
-    /* ===== SAVE TO DATABASE ===== */
 
     const payload = {
       requestId,
-      type,
-      description: description || null,
+      type: req.body.type,
+      description: req.body.description || null,
       fileUrl,
     };
 
@@ -198,21 +190,13 @@ export const uploadProof = async (req, res) => {
       req.user.id
     );
 
-    /* ===== RESPONSE ===== */
-
-    return res.status(201).json({
-      success: true,
+    return sendSuccess(res, 201, {
       message: 'Proof uploaded successfully',
       data,
     });
-
   } catch (error) {
     console.error('UPLOAD PROOF ERROR:', error);
-
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to upload proof',
-    });
+    return sendError(res, error);
   }
 };
 

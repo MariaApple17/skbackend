@@ -1,9 +1,6 @@
 import { db } from '../config/db.config.js';
 
-/* ======================================================
-   ERROR HELPER
-====================================================== */
-
+/* ================= ERROR HELPER ================= */
 class AppError extends Error {
   constructor(message, statusCode = 400, code = 'BAD_REQUEST', details = null) {
     super(message);
@@ -13,16 +10,13 @@ class AppError extends Error {
   }
 }
 
-/* ======================================================
-   HELPERS
-====================================================== */
-
-const toNumber = (value, name = 'id') => {
-  const num = Number(value);
-  if (!Number.isFinite(num)) {
+/* ================= HELPERS ================= */
+const toNumber = (v, name = 'id') => {
+  const n = Number(v);
+  if (!Number.isFinite(n)) {
     throw new AppError(`Invalid ${name}`, 400, 'INVALID_NUMBER');
   }
-  return num;
+  return n;
 };
 
 const normalizeItems = (items = []) => {
@@ -54,10 +48,7 @@ const VALID_STATUSES = [
   'COMPLETED',
 ];
 
-/* ======================================================
-   CREATE REQUEST
-====================================================== */
-
+/* ================= CREATE REQUEST ================= */
 export const createRequest = async (data, userId) => {
   const allocationId = toNumber(data.allocationId, 'allocationId');
   const items = normalizeItems(data.items);
@@ -104,10 +95,7 @@ export const createRequest = async (data, userId) => {
   });
 };
 
-/* ======================================================
-   UPDATE REQUEST
-====================================================== */
-
+/* ================= UPDATE REQUEST ================= */
 export const updateRequest = async (id, data) => {
   id = toNumber(id, 'requestId');
 
@@ -123,7 +111,8 @@ export const updateRequest = async (id, data) => {
     throw new AppError(
       'Only draft requests can be updated',
       400,
-      'INVALID_STATUS_TRANSITION'
+      'INVALID_STATUS_TRANSITION',
+      { currentStatus: request.status }
     );
   }
 
@@ -137,11 +126,8 @@ export const updateRequest = async (id, data) => {
   });
 };
 
-/* ======================================================
-   SUBMIT REQUEST
-====================================================== */
-
-export const submitRequest = async id => {
+/* ================= SUBMIT REQUEST ================= */
+export const submitRequest = async (id) => {
   id = toNumber(id, 'requestId');
 
   const request = await db.procurementRequest.findFirst({
@@ -157,7 +143,8 @@ export const submitRequest = async id => {
     throw new AppError(
       'Only draft requests can be submitted',
       400,
-      'INVALID_STATUS_TRANSITION'
+      'INVALID_STATUS_TRANSITION',
+      { currentStatus: request.status }
     );
   }
 
@@ -175,10 +162,7 @@ export const submitRequest = async id => {
   });
 };
 
-/* ======================================================
-   APPROVE REQUEST
-====================================================== */
-
+/* ================= APPROVE REQUEST ================= */
 export const approveRequest = async (requestId, approverId, remarks) => {
   requestId = toNumber(requestId, 'requestId');
   approverId = toNumber(approverId, 'approverId');
@@ -197,7 +181,8 @@ export const approveRequest = async (requestId, approverId, remarks) => {
       throw new AppError(
         'Only submitted requests can be approved',
         400,
-        'INVALID_STATUS_TRANSITION'
+        'INVALID_STATUS_TRANSITION',
+        { currentStatus: request.status }
       );
     }
 
@@ -209,7 +194,11 @@ export const approveRequest = async (requestId, approverId, remarks) => {
       throw new AppError(
         'Insufficient budget allocation',
         400,
-        'INSUFFICIENT_BUDGET'
+        'INSUFFICIENT_BUDGET',
+        {
+          requested: request.amount,
+          remaining,
+        }
       );
     }
 
@@ -229,15 +218,12 @@ export const approveRequest = async (requestId, approverId, remarks) => {
   });
 };
 
-/* ======================================================
-   REJECT REQUEST
-====================================================== */
-
+/* ================= REJECT REQUEST ================= */
 export const rejectRequest = async (requestId, approverId, remarks) => {
   requestId = toNumber(requestId, 'requestId');
   approverId = toNumber(approverId, 'approverId');
 
-  if (!remarks?.trim()) {
+  if (!remarks || !remarks.trim()) {
     throw new AppError(
       'Rejection remarks are required',
       400,
@@ -258,7 +244,8 @@ export const rejectRequest = async (requestId, approverId, remarks) => {
       throw new AppError(
         'Only submitted requests can be rejected',
         400,
-        'INVALID_STATUS_TRANSITION'
+        'INVALID_STATUS_TRANSITION',
+        { currentStatus: request.status }
       );
     }
 
@@ -278,10 +265,7 @@ export const rejectRequest = async (requestId, approverId, remarks) => {
   });
 };
 
-/* ======================================================
-   MARK AS PURCHASED
-====================================================== */
-
+/* ================= MARK AS PURCHASED ================= */
 export const markPurchased = async requestId => {
   requestId = toNumber(requestId, 'requestId');
 
@@ -297,7 +281,8 @@ export const markPurchased = async requestId => {
     throw new AppError(
       'Request must be approved before purchase',
       400,
-      'INVALID_STATUS_TRANSITION'
+      'INVALID_STATUS_TRANSITION',
+      { currentStatus: request.status }
     );
   }
 
@@ -307,10 +292,7 @@ export const markPurchased = async requestId => {
   });
 };
 
-/* ======================================================
-   COMPLETE REQUEST
-====================================================== */
-
+/* ================= COMPLETE REQUEST ================= */
 export const completeRequest = async requestId => {
   requestId = toNumber(requestId, 'requestId');
 
@@ -328,7 +310,8 @@ export const completeRequest = async requestId => {
       throw new AppError(
         'Only purchased requests can be completed',
         400,
-        'INVALID_STATUS_TRANSITION'
+        'INVALID_STATUS_TRANSITION',
+        { currentStatus: request.status }
       );
     }
 
@@ -346,38 +329,16 @@ export const completeRequest = async requestId => {
   });
 };
 
-/* ======================================================
-   UPLOAD PROOF
-====================================================== */
-
+/* ================= UPLOAD PROOF ================= */
 export const uploadProof = async (data, userId) => {
   const requestId = toNumber(data.requestId, 'requestId');
 
   const request = await db.procurementRequest.findFirst({
     where: { id: requestId, deletedAt: null },
-    include: { proofs: true },
   });
 
   if (!request) {
     throw new AppError('Request not found', 404, 'NOT_FOUND');
-  }
-
-  if (request.status !== 'PURCHASED') {
-    throw new AppError(
-      'Proof can only be uploaded for purchased requests',
-      400,
-      'INVALID_STATUS_TRANSITION'
-    );
-  }
-
-  // Optional: Prevent duplicate proof type
-  const existing = request.proofs.find(p => p.type === data.type);
-  if (existing) {
-    throw new AppError(
-      `Proof type ${data.type} already uploaded`,
-      400,
-      'DUPLICATE_PROOF'
-    );
   }
 
   return db.procurementProof.create({
@@ -389,4 +350,128 @@ export const uploadProof = async (data, userId) => {
       uploadedById: toNumber(userId, 'userId'),
     },
   });
+};
+
+/* ================= GET ALL REQUESTS ================= */
+export const getAllRequests = async ({
+  q = '',
+  status,
+  page = 1,
+  limit = 10,
+}) => {
+  page = toNumber(page, 'page');
+  limit = toNumber(limit, 'limit');
+
+  if (status && !VALID_STATUSES.includes(status)) {
+    throw new AppError('Invalid request status', 400, 'INVALID_STATUS');
+  }
+
+  const where = {
+    deletedAt: null,
+    ...(q && { title: { contains: q } }),
+    ...(status && { status }),
+  };
+
+  const skip = (page - 1) * limit;
+
+  const [rows, total] = await Promise.all([
+    db.procurementRequest.findMany({
+      where,
+      skip,
+      take: limit,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        items: true,
+        proofs: true,
+        vendor: true,
+        allocation: true,
+        createdBy: true,
+        approvals: {
+          orderBy: { createdAt: 'desc' }, // 👈 latest first
+          select: {
+            id: true,
+            status: true,
+            remarks: true,
+            approverId: true,
+            createdAt: true,
+          },
+        },
+      },
+    }),
+    db.procurementRequest.count({ where }),
+  ]);
+
+  // 👇 expose latest remarks directly (UX-friendly)
+  const data = rows.map(r => ({
+    ...r,
+    latestRemark: r.approvals[0]?.remarks ?? null,
+    latestDecision: r.approvals[0]?.status ?? null,
+  }));
+
+  return {
+    data,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+    },
+  };
+};
+
+
+/* ================= SOFT DELETE ================= */
+export const deleteRequest = async id => {
+  id = toNumber(id, 'requestId');
+
+  const request = await db.procurementRequest.findFirst({
+    where: { id, deletedAt: null },
+  });
+
+  if (!request) {
+    throw new AppError('Request not found', 404, 'NOT_FOUND');
+  }
+
+  if (request.status !== 'DRAFT') {
+    throw new AppError(
+      'Only draft requests can be deleted',
+      400,
+      'INVALID_STATUS_TRANSITION',
+      { currentStatus: request.status }
+    );
+  }
+
+  return db.procurementRequest.update({
+    where: { id },
+    data: { deletedAt: new Date() },
+  });
+};
+
+/* ================= GET DRAFT REQUEST BY ID ================= */
+export const getDraftRequestById = async id => {
+  id = toNumber(id, 'requestId');
+
+  const request = await db.procurementRequest.findFirst({
+    where: {
+      id,
+      status: 'DRAFT',
+      deletedAt: null,
+    },
+    include: {
+      items: true,
+      allocation: true,
+      vendor: true,
+      createdBy: true,
+    },
+  });
+
+  if (!request) {
+    throw new AppError(
+      'Draft procurement request not found',
+      404,
+      'NOT_FOUND'
+    );
+  }
+
+  return request;
 };

@@ -2,7 +2,7 @@ import fs from 'fs';
 import multer from 'multer';
 import path from 'path';
 
-/* ================= TEMP DIRECTORY ================= */
+/* ================= BASE DIR ================= */
 
 const TMP_DIR = 'uploads/tmp';
 
@@ -19,60 +19,37 @@ const storage = multer.diskStorage({
   filename: (_req, file, cb) => {
     const unique =
       Date.now() + '-' + Math.round(Math.random() * 1e9);
-
     cb(null, unique + path.extname(file.originalname));
   },
 });
 
-/* ================= FILE FILTER ================= */
+/* ================= FILTER ================= */
 
-const fileFilter = (_req, file, cb) => {
-  const allowedTypes = [
-    'image/jpeg',
-    'image/png',
-    'image/jpg',
-    'application/pdf',
-  ];
-
-  if (!allowedTypes.includes(file.mimetype)) {
+const imageOnly = (_req, file, cb) => {
+  if (!file.mimetype.startsWith('image/')) {
     return cb(
-      new Error('Only JPG, PNG, and PDF files are allowed'),
+      new Error('Only image files are allowed'),
       false
     );
   }
-
   cb(null, true);
 };
 
-/* ================= MULTER CONFIG ================= */
+/* ================= BASE UPLOAD ================= */
 
 const baseUpload = multer({
   storage,
-  fileFilter,
+  fileFilter: imageOnly,
   limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB
+    fileSize: 2 * 1024 * 1024, // 2MB
   },
 });
 
 /* ================= EXPORTS ================= */
 
-// For procurement proof
-export const uploadProofFile = baseUpload;
+// keep explicit intent
+export const uploadProgramImage = baseUpload;
+export const uploadSkOfficialImage = baseUpload;
 
-// For program image (image only)
-export const uploadProgramImage = multer({
-  storage,
-  fileFilter: (_req, file, cb) => {
-    if (!file.mimetype.startsWith('image/')) {
-      return cb(new Error('Only image files allowed'), false);
-    }
-    cb(null, true);
-  },
-  limits: { fileSize: 3 * 1024 * 1024 },
-});
-
-// For SK official image
-export const uploadSkOfficialImage = uploadProgramImage;
-
-// Default
+// optional default
 export default baseUpload;
