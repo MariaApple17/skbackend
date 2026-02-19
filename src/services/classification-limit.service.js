@@ -1,12 +1,71 @@
 import { db } from '../config/db.config.js';
 
+const CATEGORY_VALUES = ['ADMINISTRATIVE', 'YOUTH'];
+
+const parseCategory = (value, { required = true } = {}) => {
+  if (value === undefined || value === null || value === '') {
+    if (required) {
+      throw new Error('Category is required (ADMINISTRATIVE or YOUTH)');
+    }
+    return undefined;
+  }
+
+  if (typeof value !== 'string') {
+    throw new Error('Invalid category. Use ADMINISTRATIVE or YOUTH');
+  }
+
+  const normalized = value.trim().toUpperCase();
+  if (!CATEGORY_VALUES.includes(normalized)) {
+    throw new Error('Invalid category. Use ADMINISTRATIVE or YOUTH');
+  }
+
+  return normalized;
+};
+
+const getCategoryCap = (budget, category) =>
+  category === 'ADMINISTRATIVE'
+    ? Number(budget.administrativeAmount)
+    : Number(budget.youthAmount);
+
+const assertCategoryLimitWithinBudget = async ({
+  budget,
+  budgetId,
+  category,
+  limitAmount,
+  excludeLimitId,
+}) => {
+  const cap = getCategoryCap(budget, category);
+
+  if (Number(limitAmount) > cap) {
+    throw new Error(
+      `Limit amount cannot exceed ${category.toLowerCase()} budget (${cap})`
+    );
+  }
+
+  const usedLimits = await db.budgetClassificationLimit.aggregate({
+    where: {
+      budgetId: Number(budgetId),
+      category,
+      ...(excludeLimitId && { id: { not: Number(excludeLimitId) } }),
+    },
+    _sum: { limitAmount: true },
+  });
+
+  const remaining = cap - Number(usedLimits._sum.limitAmount || 0);
+  if (Number(limitAmount) > remaining) {
+    throw new Error(
+      `Limit amount exceeds remaining ${category.toLowerCase()} budget. Remaining budget: ${remaining}`
+    );
+  }
+};
+
 /* ======================================================
    CREATE BUDGET CLASSIFICATION LIMIT
 ====================================================== */
 export const createClassificationLimitService = async (data) => {
-  const { budgetId, classificationId, limitAmount } = data;
+  const { budgetId, classificationId, limitAmount, category: rawCategory } = data;
+  const category = parseCategory(rawCategory);
 
-  /* ================= BASIC VALIDATION ================= */
   if (!Number.isInteger(Number(budgetId))) {
     throw new Error('Invalid budgetId');
   }
@@ -15,10 +74,7 @@ export const createClassificationLimitService = async (data) => {
     throw new Error('Invalid classificationId');
   }
 
-  if (
-    limitAmount === undefined ||
-    !Number.isFinite(Number(limitAmount))
-  ) {
+  if (limitAmount === undefined || !Number.isFinite(Number(limitAmount))) {
     throw new Error('Invalid limit amount');
   }
 
@@ -26,76 +82,52 @@ export const createClassificationLimitService = async (data) => {
     throw new Error('Limit amount must be greater than zero');
   }
 
-  /* ================= BUDGET CHECK ================= */
   const budget = await db.budget.findFirst({
-    where: {
-      id: Number(budgetId),
-      deletedAt: null,
-    },
+    where: { id: Number(budgetId), deletedAt: null },
   });
 
   if (!budget) {
     throw new Error('Budget not found');
   }
 
-  /* ================= CLASSIFICATION CHECK ================= */
   const classification = await db.budgetClassification.findFirst({
-    where: {
-      id: Number(classificationId),
-      deletedAt: null,
-    },
+    where: { id: Number(classificationId), deletedAt: null },
   });
 
   if (!classification) {
     throw new Error('Classification not found');
   }
 
-  /* ================= DUPLICATE CHECK ================= */
+  if (!classification.allowedCategories?.includes(category)) {
+    throw new Error('Classification is not assigned to this category');
+  }
+
   const existingLimit = await db.budgetClassificationLimit.findUnique({
     where: {
-      budgetId_classificationId: {
+      budgetId_classificationId_category: {
         budgetId: Number(budgetId),
         classificationId: Number(classificationId),
+        category,
       },
     },
   });
 
   if (existingLimit) {
-    throw new Error(
-      'Budget limit for this classification already exists'
-    );
+    throw new Error('Budget limit for this classification already exists');
   }
 
-  /* ================= TOTAL BUDGET VALIDATION ================= */
-  if (Number(limitAmount) > Number(budget.totalAmount)) {
-    throw new Error(
-      `Limit amount cannot exceed total budget amount (${Number(
-        budget.totalAmount
-      )})`
-    );
-  }
-
-  /* ================= REMAINING BUDGET CHECK ================= */
-  const usedLimits = await db.budgetClassificationLimit.aggregate({
-    where: { budgetId: Number(budgetId) },
-    _sum: { limitAmount: true },
+  await assertCategoryLimitWithinBudget({
+    budget,
+    budgetId,
+    category,
+    limitAmount: Number(limitAmount),
   });
 
-  const remainingBudget =
-    Number(budget.totalAmount) -
-    Number(usedLimits._sum.limitAmount || 0);
-
-  if (Number(limitAmount) > remainingBudget) {
-    throw new Error(
-      `Limit amount exceeds remaining budget. Remaining budget: ${remainingBudget}`
-    );
-  }
-
-  /* ================= CREATE LIMIT ================= */
   return db.budgetClassificationLimit.create({
     data: {
       budgetId: Number(budgetId),
       classificationId: Number(classificationId),
+      category,
       limitAmount: Number(limitAmount),
     },
     include: {
@@ -103,21 +135,12 @@ export const createClassificationLimitService = async (data) => {
         select: {
           id: true,
           totalAmount: true,
-          fiscalYear: {
-            select: {
-              id: true,
-              year: true,
-            },
-          },
+          administrativeAmount: true,
+          youthAmount: true,
+          fiscalYear: { select: { id: true, year: true } },
         },
       },
-      classification: {
-        select: {
-          id: true,
-          code: true,
-          name: true,
-        },
-      },
+      classification: { select: { id: true, code: true, name: true } },
     },
   });
 };
@@ -125,10 +148,11 @@ export const createClassificationLimitService = async (data) => {
 /* ======================================================
    GET ALL CLASSIFICATION LIMITS
 ====================================================== */
-export const getClassificationLimitsService = async (budgetId) => {
-  const whereClause = budgetId
-    ? { budgetId: Number(budgetId) }
-    : {};
+export const getClassificationLimitsService = async (budgetId, rawCategory) => {
+  const category = parseCategory(rawCategory, { required: false });
+  const whereClause = budgetId ? { budgetId: Number(budgetId) } : {};
+
+  if (category) whereClause.category = category;
 
   return db.budgetClassificationLimit.findMany({
     where: whereClause,
@@ -138,21 +162,12 @@ export const getClassificationLimitsService = async (budgetId) => {
         select: {
           id: true,
           totalAmount: true,
-          fiscalYear: {
-            select: {
-              id: true,
-              year: true,
-            },
-          },
+          administrativeAmount: true,
+          youthAmount: true,
+          fiscalYear: { select: { id: true, year: true } },
         },
       },
-      classification: {
-        select: {
-          id: true,
-          code: true,
-          name: true,
-        },
-      },
+      classification: { select: { id: true, code: true, name: true } },
     },
   });
 };
@@ -172,21 +187,12 @@ export const getClassificationLimitByIdService = async (id) => {
         select: {
           id: true,
           totalAmount: true,
-          fiscalYear: {
-            select: {
-              id: true,
-              year: true,
-            },
-          },
+          administrativeAmount: true,
+          youthAmount: true,
+          fiscalYear: { select: { id: true, year: true } },
         },
       },
-      classification: {
-        select: {
-          id: true,
-          code: true,
-          name: true,
-        },
-      },
+      classification: { select: { id: true, code: true, name: true } },
     },
   });
 
@@ -206,23 +212,21 @@ export const updateClassificationLimitService = async (id, data) => {
   }
 
   const { limitAmount } = data;
+  const nextCategory = parseCategory(data.category, { required: false });
 
   if (limitAmount === undefined) {
     throw new Error('No data provided for update');
   }
 
-  if (
-    !Number.isFinite(Number(limitAmount)) ||
-    Number(limitAmount) <= 0
-  ) {
+  if (!Number.isFinite(Number(limitAmount)) || Number(limitAmount) <= 0) {
     throw new Error('Limit amount must be greater than zero');
   }
 
-  /* ================= GET EXISTING LIMIT ================= */
   const existingLimit = await db.budgetClassificationLimit.findFirst({
     where: { id: Number(id) },
     include: {
       budget: true,
+      classification: true,
     },
   });
 
@@ -230,60 +234,53 @@ export const updateClassificationLimitService = async (id, data) => {
     throw new Error('Classification limit not found');
   }
 
-  /* ================= TOTAL BUDGET VALIDATION ================= */
-  if (Number(limitAmount) > Number(existingLimit.budget.totalAmount)) {
-    throw new Error(
-      `Limit amount cannot exceed total budget amount (${Number(
-        existingLimit.budget.totalAmount
-      )})`
-    );
+  const targetCategory = nextCategory || existingLimit.category;
+
+  if (!existingLimit.classification.allowedCategories?.includes(targetCategory)) {
+    throw new Error('Classification is not assigned to this category');
   }
 
-  /* ================= REMAINING BUDGET CHECK ================= */
-  const usedLimits = await db.budgetClassificationLimit.aggregate({
-    where: {
-      budgetId: existingLimit.budgetId,
-      id: { not: Number(id) },
-    },
-    _sum: { limitAmount: true },
+  if (nextCategory) {
+    const duplicate = await db.budgetClassificationLimit.findUnique({
+      where: {
+        budgetId_classificationId_category: {
+          budgetId: existingLimit.budgetId,
+          classificationId: existingLimit.classificationId,
+          category: targetCategory,
+        },
+      },
+    });
+
+    if (duplicate && duplicate.id !== Number(id)) {
+      throw new Error('Budget limit for this classification already exists');
+    }
+  }
+
+  await assertCategoryLimitWithinBudget({
+    budget: existingLimit.budget,
+    budgetId: existingLimit.budgetId,
+    category: targetCategory,
+    limitAmount: Number(limitAmount),
+    excludeLimitId: id,
   });
 
-  const remainingBudget =
-    Number(existingLimit.budget.totalAmount) -
-    Number(usedLimits._sum.limitAmount || 0);
-
-  if (Number(limitAmount) > remainingBudget) {
-    throw new Error(
-      `Limit amount exceeds remaining budget. Remaining budget: ${remainingBudget}`
-    );
-  }
-
-  /* ================= UPDATE LIMIT ================= */
   return db.budgetClassificationLimit.update({
     where: { id: Number(id) },
     data: {
       limitAmount: Number(limitAmount),
+      ...(nextCategory && { category: nextCategory }),
     },
     include: {
       budget: {
         select: {
           id: true,
           totalAmount: true,
-          fiscalYear: {
-            select: {
-              id: true,
-              year: true,
-            },
-          },
+          administrativeAmount: true,
+          youthAmount: true,
+          fiscalYear: { select: { id: true, year: true } },
         },
       },
-      classification: {
-        select: {
-          id: true,
-          code: true,
-          name: true,
-        },
-      },
+      classification: { select: { id: true, code: true, name: true } },
     },
   });
 };
@@ -313,15 +310,14 @@ export const deleteClassificationLimitService = async (id) => {
     throw new Error('Classification limit not found');
   }
 
-  /* ================= CHECK FOR ALLOCATIONS ================= */
   const hasAllocations = limit.classification.allocations.some(
-    (allocation) => allocation.budgetId === limit.budgetId
+    (allocation) =>
+      allocation.budgetId === limit.budgetId &&
+      allocation.category === limit.category
   );
 
   if (hasAllocations) {
-    throw new Error(
-      'Cannot delete limit with existing budget allocations'
-    );
+    throw new Error('Cannot delete limit with existing budget allocations');
   }
 
   return db.budgetClassificationLimit.delete({
@@ -332,7 +328,12 @@ export const deleteClassificationLimitService = async (id) => {
 /* ======================================================
    GET LIMITS BY CLASSIFICATION ID
 ====================================================== */
-export const getLimitsByClassificationService = async (classificationId) => {
+export const getLimitsByClassificationService = async (
+  classificationId,
+  rawCategory
+) => {
+  const category = parseCategory(rawCategory, { required: false });
+
   if (!Number.isInteger(Number(classificationId))) {
     throw new Error('Invalid classificationId');
   }
@@ -349,35 +350,26 @@ export const getLimitsByClassificationService = async (classificationId) => {
   }
 
   const limits = await db.budgetClassificationLimit.findMany({
-    where: { classificationId: Number(classificationId) },
+    where: {
+      classificationId: Number(classificationId),
+      ...(category && { category }),
+    },
     orderBy: { createdAt: 'desc' },
     include: {
       budget: {
         select: {
           id: true,
           totalAmount: true,
-          fiscalYear: {
-            select: {
-              id: true,
-              year: true,
-            },
-          },
+          administrativeAmount: true,
+          youthAmount: true,
+          fiscalYear: { select: { id: true, year: true } },
         },
       },
-      classification: {
-        select: {
-          id: true,
-          code: true,
-          name: true,
-        },
-      },
+      classification: { select: { id: true, code: true, name: true } },
     },
   });
 
-  return {
-    classification,
-    limits,
-  };
+  return { classification, limits };
 };
 
 /* ======================================================
@@ -404,13 +396,35 @@ export const getRemainingBudgetService = async (budgetId) => {
     _sum: { limitAmount: true },
   });
 
+  const byCategory = await Promise.all(
+    CATEGORY_VALUES.map(async (category) => {
+      const grouped = await db.budgetClassificationLimit.aggregate({
+        where: { budgetId: Number(budgetId), category },
+        _sum: { limitAmount: true },
+      });
+
+      const cap = getCategoryCap(budget, category);
+      const totalAllocated = Number(grouped._sum.limitAmount || 0);
+
+      return {
+        category,
+        cap,
+        totalAllocated,
+        remaining: cap - totalAllocated,
+      };
+    })
+  );
+
   const totalAllocated = Number(usedLimits._sum.limitAmount || 0);
   const remaining = Number(budget.totalAmount) - totalAllocated;
 
   return {
     budgetId: budget.id,
     totalAmount: Number(budget.totalAmount),
+    administrativeAmount: Number(budget.administrativeAmount),
+    youthAmount: Number(budget.youthAmount),
     totalAllocated,
     remaining,
+    byCategory,
   };
 };

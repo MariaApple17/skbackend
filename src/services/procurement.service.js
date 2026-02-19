@@ -49,9 +49,14 @@ const VALID_STATUSES = [
 ];
 
 /* ================= CREATE REQUEST ================= */
-export const createRequest = async (data, userId) => {
+export const createRequest = async (data, userId, fiscalYearId) => {
   const allocationId = toNumber(data.allocationId, 'allocationId');
   const items = normalizeItems(data.items);
+  const unit = data.unit?.trim();
+
+  if (!unit) {
+    throw new AppError('Unit is required', 400, 'UNIT_REQUIRED');
+  }
 
   if (!items.length) {
     throw new AppError(
@@ -83,8 +88,10 @@ export const createRequest = async (data, userId) => {
     data: {
       title: data.title?.trim(),
       description: data.description ?? null,
+      unit,
       amount,
       allocationId,
+      fiscalYearId,
       vendorId: data.vendorId
         ? toNumber(data.vendorId, 'vendorId')
         : null,
@@ -116,18 +123,25 @@ export const updateRequest = async (id, data) => {
     );
   }
 
+  const unit = data.unit?.trim();
+
+  if (data.unit !== undefined && !unit) {
+    throw new AppError('Unit cannot be empty', 400, 'INVALID_UNIT');
+  }
+
   return db.procurementRequest.update({
     where: { id },
     data: {
       title: data.title?.trim(),
       description: data.description ?? null,
+      ...(data.unit !== undefined && { unit }),
       amount: toNumber(data.amount, 'amount'),
     },
   });
 };
 
 /* ================= SUBMIT REQUEST ================= */
-export const submitRequest = async (id) => {
+export const submitRequest = async id => {
   id = toNumber(id, 'requestId');
 
   const request = await db.procurementRequest.findFirst({
@@ -143,8 +157,7 @@ export const submitRequest = async (id) => {
     throw new AppError(
       'Only draft requests can be submitted',
       400,
-      'INVALID_STATUS_TRANSITION',
-      { currentStatus: request.status }
+      'INVALID_STATUS_TRANSITION'
     );
   }
 
@@ -181,8 +194,7 @@ export const approveRequest = async (requestId, approverId, remarks) => {
       throw new AppError(
         'Only submitted requests can be approved',
         400,
-        'INVALID_STATUS_TRANSITION',
-        { currentStatus: request.status }
+        'INVALID_STATUS_TRANSITION'
       );
     }
 
@@ -195,10 +207,7 @@ export const approveRequest = async (requestId, approverId, remarks) => {
         'Insufficient budget allocation',
         400,
         'INSUFFICIENT_BUDGET',
-        {
-          requested: request.amount,
-          remaining,
-        }
+        { requested: request.amount, remaining }
       );
     }
 
@@ -244,8 +253,7 @@ export const rejectRequest = async (requestId, approverId, remarks) => {
       throw new AppError(
         'Only submitted requests can be rejected',
         400,
-        'INVALID_STATUS_TRANSITION',
-        { currentStatus: request.status }
+        'INVALID_STATUS_TRANSITION'
       );
     }
 
@@ -281,8 +289,7 @@ export const markPurchased = async requestId => {
     throw new AppError(
       'Request must be approved before purchase',
       400,
-      'INVALID_STATUS_TRANSITION',
-      { currentStatus: request.status }
+      'INVALID_STATUS_TRANSITION'
     );
   }
 
@@ -310,16 +317,13 @@ export const completeRequest = async requestId => {
       throw new AppError(
         'Only purchased requests can be completed',
         400,
-        'INVALID_STATUS_TRANSITION',
-        { currentStatus: request.status }
+        'INVALID_STATUS_TRANSITION'
       );
     }
 
     await tx.budgetAllocation.update({
       where: { id: request.allocationId },
-      data: {
-        usedAmount: { increment: request.amount },
-      },
+      data: { usedAmount: { increment: request.amount } },
     });
 
     return tx.procurementRequest.update({
@@ -358,6 +362,7 @@ export const getAllRequests = async ({
   status,
   page = 1,
   limit = 10,
+  fiscalYearId,
 }) => {
   page = toNumber(page, 'page');
   limit = toNumber(limit, 'limit');
@@ -368,6 +373,7 @@ export const getAllRequests = async ({
 
   const where = {
     deletedAt: null,
+    ...(fiscalYearId && { fiscalYearId }),
     ...(q && { title: { contains: q } }),
     ...(status && { status }),
   };
@@ -387,7 +393,7 @@ export const getAllRequests = async ({
         allocation: true,
         createdBy: true,
         approvals: {
-          orderBy: { createdAt: 'desc' }, // 👈 latest first
+          orderBy: { createdAt: 'desc' },
           select: {
             id: true,
             status: true,
@@ -401,7 +407,6 @@ export const getAllRequests = async ({
     db.procurementRequest.count({ where }),
   ]);
 
-  // 👇 expose latest remarks directly (UX-friendly)
   const data = rows.map(r => ({
     ...r,
     latestRemark: r.approvals[0]?.remarks ?? null,
@@ -419,7 +424,6 @@ export const getAllRequests = async ({
   };
 };
 
-
 /* ================= SOFT DELETE ================= */
 export const deleteRequest = async id => {
   id = toNumber(id, 'requestId');
@@ -436,8 +440,7 @@ export const deleteRequest = async id => {
     throw new AppError(
       'Only draft requests can be deleted',
       400,
-      'INVALID_STATUS_TRANSITION',
-      { currentStatus: request.status }
+      'INVALID_STATUS_TRANSITION'
     );
   }
 

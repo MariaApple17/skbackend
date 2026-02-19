@@ -18,6 +18,7 @@ import reportRoutes from './routes/report.routes.js';
 import roleRoutes from './routes/role.route.js';
 import skOfficialRoutes from './routes/skOfficial.route.js';
 import systemProfileRoutes from './routes/systemProfile.route.js';
+import transparencyRoutes from './routes/transparency.route.js';
 import userRoutes from './routes/user.route.js';
 
 const app = express();
@@ -56,6 +57,9 @@ app.use("/api/reports", reportRoutes);
 app.use('/api/sk-officials', skOfficialRoutes);
 
 app.use('/api/system-profile', systemProfileRoutes);
+
+/* ================= PUBLIC TRANSPARENCY ================= */
+app.use('/api/public/transparency', transparencyRoutes);
 
 /* ================= STATIC FILES ================= */
 app.use(

@@ -5,6 +5,7 @@ import {
   budgetSummary,
   procurementReport,
   programUtilization,
+   accomplishmentReport,
 } from '../controllers/report.controller.js';
 
 const router = Router();
@@ -28,5 +29,10 @@ router.get(
   "/program-utilization",
   programUtilization
 );
+router.get(
+  "/accomplishment",
+  accomplishmentReport
+);
+
 
 export default router;

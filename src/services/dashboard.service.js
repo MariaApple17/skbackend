@@ -1,5 +1,36 @@
 import { db } from '../config/db.config.js';
 
+const CATEGORY_KEYS = ['ADMINISTRATIVE', 'YOUTH'];
+
+const getCategoryBudgetCap = (budget, category) =>
+  category === 'ADMINISTRATIVE'
+    ? Number(budget.administrativeAmount)
+    : Number(budget.youthAmount);
+
+const buildCategoryBreakdown = (budget, allocations) => {
+  return CATEGORY_KEYS.map((category) => {
+    const allocated = allocations
+      .filter((a) => a.category === category)
+      .reduce((sum, a) => sum + Number(a.allocatedAmount), 0);
+
+    const used = allocations
+      .filter((a) => a.category === category)
+      .reduce((sum, a) => sum + Number(a.usedAmount), 0);
+
+    const cap = getCategoryBudgetCap(budget, category);
+    const remaining = cap - used;
+
+    return {
+      category,
+      cap,
+      allocated,
+      used,
+      remaining,
+      utilizationRate: cap > 0 ? ((used / cap) * 100).toFixed(2) : '0.00',
+    };
+  });
+};
+
 /**
  * @param {Object} options
  * @param {number} [options.fiscalYearId]
@@ -59,6 +90,8 @@ export const getDashboardData = async ({
       return {
         fiscalYear: fy.year,
         total: Number(budget.totalAmount),
+        administrativeAmount: Number(budget.administrativeAmount),
+        youthAmount: Number(budget.youthAmount),
         allocated,
         used,
         remaining: Number(budget.totalAmount) - used,
@@ -139,6 +172,7 @@ export const getDashboardData = async ({
   );
 
   const remaining = Number(budget.totalAmount) - used;
+  const byCategory = buildCategoryBreakdown(budget, budget.allocations);
 
   /* ================= PROCUREMENT ================= */
   const procurement = await db.procurementRequest.groupBy({
@@ -207,6 +241,8 @@ export const getDashboardData = async ({
     },
     budget: {
       total: Number(budget.totalAmount),
+      administrativeAmount: Number(budget.administrativeAmount),
+      youthAmount: Number(budget.youthAmount),
       allocated,
       used,
       remaining,
@@ -214,6 +250,7 @@ export const getDashboardData = async ({
         (used / Number(budget.totalAmount)) *
         100
       ).toFixed(2),
+      byCategory,
     },
     procurement,
     approvals,

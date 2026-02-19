@@ -64,13 +64,12 @@ const validateClassificationLimit = async ({
 
   return { classificationLimit, usedAllocation, remainingLimit };
 };
-
-/* ================= CREATE ================= */
 export const createBudgetAllocation = async (payload) => {
   const {
     budgetId,
     programId,
     classificationId,
+    category, // ✅ ADD THIS
     objectOfExpenditureId,
     allocatedAmount,
   } = payload;
@@ -80,6 +79,7 @@ export const createBudgetAllocation = async (payload) => {
     !budgetId ||
     !programId ||
     !classificationId ||
+    !category || // ✅ REQUIRED
     !objectOfExpenditureId ||
     allocatedAmount === undefined
   ) {
@@ -115,6 +115,7 @@ export const createBudgetAllocation = async (payload) => {
       budgetId,
       programId,
       classificationId,
+      category, // ✅ FIX HERE
       objectOfExpenditureId,
       allocatedAmount,
     },
@@ -126,6 +127,7 @@ export const createBudgetAllocation = async (payload) => {
     },
   });
 };
+
 
 /* ================= GET ALL (SEARCH | FILTER | PAGINATION | SORT) ================= */
 export const getAllBudgetAllocations = async (params = {}) => {

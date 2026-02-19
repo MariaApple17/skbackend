@@ -13,6 +13,46 @@ CREATE TYPE "LogLevel" AS ENUM ('INFO', 'WARNING', 'ERROR');
 -- CreateEnum
 CREATE TYPE "PermissionModule" AS ENUM ('DASHBOARD', 'BUDGET_PREPARATION', 'PROCUREMENT', 'DATA_SETUP', 'PROGRAMS_MANAGEMENT', 'USER_MANAGEMENT', 'ROLES_PERMISSION', 'REPORTS_PERMISSION');
 
+-- CreateEnum
+CREATE TYPE "Gender" AS ENUM ('MALE', 'FEMALE', 'OTHER');
+
+-- CreateEnum
+CREATE TYPE "BudgetCategory" AS ENUM ('ADMINISTRATIVE', 'YOUTH');
+
+-- CreateTable
+CREATE TABLE "SystemProfile" (
+    "id" SERIAL NOT NULL,
+    "fiscalYearId" INTEGER NOT NULL,
+    "systemName" TEXT NOT NULL,
+    "systemDescription" TEXT,
+    "logoUrl" TEXT,
+    "location" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "deletedAt" TIMESTAMP(3),
+
+    CONSTRAINT "SystemProfile_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "SkOfficial" (
+    "id" SERIAL NOT NULL,
+    "fiscalYearId" INTEGER NOT NULL,
+    "position" TEXT NOT NULL,
+    "fullName" TEXT NOT NULL,
+    "responsibility" TEXT,
+    "birthDate" TIMESTAMP(3) NOT NULL,
+    "email" TEXT,
+    "gender" "Gender" NOT NULL,
+    "profileImageUrl" TEXT,
+    "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "deletedAt" TIMESTAMP(3),
+
+    CONSTRAINT "SkOfficial_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateTable
 CREATE TABLE "User" (
     "id" SERIAL NOT NULL,
@@ -69,7 +109,6 @@ CREATE TABLE "Program" (
     "code" TEXT NOT NULL,
     "name" TEXT NOT NULL,
     "description" TEXT,
-    "imageUrl" TEXT,
     "committeeInCharge" TEXT NOT NULL,
     "beneficiaries" TEXT NOT NULL,
     "startDate" TIMESTAMP(3) NOT NULL,
@@ -80,6 +119,20 @@ CREATE TABLE "Program" (
     "deletedAt" TIMESTAMP(3),
 
     CONSTRAINT "Program_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ProgramDocumentImage" (
+    "id" SERIAL NOT NULL,
+    "programId" INTEGER NOT NULL,
+    "imageUrl" TEXT NOT NULL,
+    "title" TEXT,
+    "description" TEXT,
+    "uploadedBy" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "deletedAt" TIMESTAMP(3),
+
+    CONSTRAINT "ProgramDocumentImage_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -98,6 +151,8 @@ CREATE TABLE "Budget" (
     "id" SERIAL NOT NULL,
     "fiscalYearId" INTEGER NOT NULL,
     "totalAmount" DECIMAL(15,2) NOT NULL,
+    "administrativeAmount" DECIMAL(15,2) NOT NULL,
+    "youthAmount" DECIMAL(15,2) NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
     "deletedAt" TIMESTAMP(3),
@@ -111,6 +166,7 @@ CREATE TABLE "BudgetClassification" (
     "code" TEXT NOT NULL,
     "name" TEXT NOT NULL,
     "description" TEXT,
+    "allowedCategories" "BudgetCategory"[] DEFAULT ARRAY['ADMINISTRATIVE', 'YOUTH']::"BudgetCategory"[],
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
     "deletedAt" TIMESTAMP(3),
@@ -123,6 +179,7 @@ CREATE TABLE "BudgetClassificationLimit" (
     "id" SERIAL NOT NULL,
     "budgetId" INTEGER NOT NULL,
     "classificationId" INTEGER NOT NULL,
+    "category" "BudgetCategory" NOT NULL,
     "limitAmount" DECIMAL(15,2) NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
@@ -149,6 +206,7 @@ CREATE TABLE "BudgetAllocation" (
     "budgetId" INTEGER NOT NULL,
     "programId" INTEGER NOT NULL,
     "classificationId" INTEGER NOT NULL,
+    "category" "BudgetCategory" NOT NULL,
     "objectOfExpenditureId" INTEGER NOT NULL,
     "allocatedAmount" DECIMAL(15,2) NOT NULL,
     "usedAmount" DECIMAL(15,2) NOT NULL DEFAULT 0,
@@ -176,8 +234,10 @@ CREATE TABLE "ProcurementRequest" (
     "id" SERIAL NOT NULL,
     "title" TEXT NOT NULL,
     "description" TEXT,
+    "unit" TEXT NOT NULL,
     "amount" DECIMAL(15,2) NOT NULL,
     "status" "ProcurementStatus" NOT NULL DEFAULT 'DRAFT',
+    "fiscalYearId" INTEGER NOT NULL,
     "allocationId" INTEGER NOT NULL,
     "vendorId" INTEGER,
     "createdById" INTEGER NOT NULL,
@@ -231,17 +291,6 @@ CREATE TABLE "Approval" (
 );
 
 -- CreateTable
-CREATE TABLE "SystemSetting" (
-    "id" SERIAL NOT NULL,
-    "key" TEXT NOT NULL,
-    "value" TEXT NOT NULL,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-    "deletedAt" TIMESTAMP(3),
-
-    CONSTRAINT "SystemSetting_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
 CREATE TABLE "SystemLog" (
     "id" SERIAL NOT NULL,
     "level" "LogLevel" NOT NULL,
@@ -253,6 +302,9 @@ CREATE TABLE "SystemLog" (
 
     CONSTRAINT "SystemLog_pkey" PRIMARY KEY ("id")
 );
+
+-- CreateIndex
+CREATE UNIQUE INDEX "SystemProfile_fiscalYearId_key" ON "SystemProfile"("fiscalYearId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
@@ -267,6 +319,9 @@ CREATE UNIQUE INDEX "Permission_key_key" ON "Permission"("key");
 CREATE UNIQUE INDEX "Program_code_key" ON "Program"("code");
 
 -- CreateIndex
+CREATE INDEX "ProgramDocumentImage_programId_idx" ON "ProgramDocumentImage"("programId");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "FiscalYear_year_key" ON "FiscalYear"("year");
 
 -- CreateIndex
@@ -276,13 +331,22 @@ CREATE UNIQUE INDEX "Budget_fiscalYearId_key" ON "Budget"("fiscalYearId");
 CREATE UNIQUE INDEX "BudgetClassification_code_key" ON "BudgetClassification"("code");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "BudgetClassificationLimit_budgetId_classificationId_key" ON "BudgetClassificationLimit"("budgetId", "classificationId");
+CREATE INDEX "BudgetClassificationLimit_budgetId_category_idx" ON "BudgetClassificationLimit"("budgetId", "category");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "BudgetClassificationLimit_budgetId_classificationId_categor_key" ON "BudgetClassificationLimit"("budgetId", "classificationId", "category");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "ObjectOfExpenditure_code_key" ON "ObjectOfExpenditure"("code");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "SystemSetting_key_key" ON "SystemSetting"("key");
+CREATE INDEX "BudgetAllocation_budgetId_category_idx" ON "BudgetAllocation"("budgetId", "category");
+
+-- AddForeignKey
+ALTER TABLE "SystemProfile" ADD CONSTRAINT "SystemProfile_fiscalYearId_fkey" FOREIGN KEY ("fiscalYearId") REFERENCES "FiscalYear"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SkOfficial" ADD CONSTRAINT "SkOfficial_fiscalYearId_fkey" FOREIGN KEY ("fiscalYearId") REFERENCES "FiscalYear"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "User" ADD CONSTRAINT "User_roleId_fkey" FOREIGN KEY ("roleId") REFERENCES "Role"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -292,6 +356,9 @@ ALTER TABLE "RolePermission" ADD CONSTRAINT "RolePermission_roleId_fkey" FOREIGN
 
 -- AddForeignKey
 ALTER TABLE "RolePermission" ADD CONSTRAINT "RolePermission_permissionId_fkey" FOREIGN KEY ("permissionId") REFERENCES "Permission"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ProgramDocumentImage" ADD CONSTRAINT "ProgramDocumentImage_programId_fkey" FOREIGN KEY ("programId") REFERENCES "Program"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Budget" ADD CONSTRAINT "Budget_fiscalYearId_fkey" FOREIGN KEY ("fiscalYearId") REFERENCES "FiscalYear"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -313,6 +380,9 @@ ALTER TABLE "BudgetAllocation" ADD CONSTRAINT "BudgetAllocation_classificationId
 
 -- AddForeignKey
 ALTER TABLE "BudgetAllocation" ADD CONSTRAINT "BudgetAllocation_objectOfExpenditureId_fkey" FOREIGN KEY ("objectOfExpenditureId") REFERENCES "ObjectOfExpenditure"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ProcurementRequest" ADD CONSTRAINT "ProcurementRequest_fiscalYearId_fkey" FOREIGN KEY ("fiscalYearId") REFERENCES "FiscalYear"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "ProcurementRequest" ADD CONSTRAINT "ProcurementRequest_allocationId_fkey" FOREIGN KEY ("allocationId") REFERENCES "BudgetAllocation"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

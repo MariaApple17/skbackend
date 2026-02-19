@@ -56,6 +56,11 @@ enum Gender {
   OTHER
 }
 
+enum BudgetCategory {
+  ADMINISTRATIVE
+  YOUTH
+}
+
 
 model SystemProfile {
   id Int @id @default(autoincrement())
@@ -227,6 +232,7 @@ model FiscalYear {
   isActive Boolean @default(false)
 
   budgets        Budget[]
+  requests ProcurementRequest[]
   systemProfile  SystemProfile?
   skOfficials    SkOfficial[]
 
@@ -239,6 +245,8 @@ model Budget {
   id           Int     @id @default(autoincrement())
   fiscalYearId Int     @unique
   totalAmount  Decimal @db.Decimal(15, 2)
+  administrativeAmount Decimal @db.Decimal(15, 2)
+  youthAmount Decimal @db.Decimal(15, 2)
 
   fiscalYear  FiscalYear         @relation(fields: [fiscalYearId], references: [id])
   allocations BudgetAllocation[]
@@ -258,6 +266,7 @@ model BudgetClassification {
   code        String  @unique
   name        String
   description String?
+  allowedCategories BudgetCategory[] @default([ADMINISTRATIVE, YOUTH])
 
   allocations BudgetAllocation[]
 
@@ -275,6 +284,7 @@ model BudgetClassificationLimit {
   id               Int     @id @default(autoincrement())
   budgetId         Int
   classificationId Int
+  category         BudgetCategory
   limitAmount      Decimal @db.Decimal(15, 2)
 
   budget         Budget               @relation(fields: [budgetId], references: [id])
@@ -283,7 +293,8 @@ model BudgetClassificationLimit {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([budgetId, classificationId])
+  @@unique([budgetId, classificationId, category])
+  @@index([budgetId, category])
 }
 
 model ObjectOfExpenditure {
@@ -304,6 +315,7 @@ model BudgetAllocation {
   budgetId              Int
   programId             Int
   classificationId      Int
+  category              BudgetCategory
   objectOfExpenditureId Int
   allocatedAmount       Decimal @db.Decimal(15, 2)
   usedAmount            Decimal @default(0) @db.Decimal(15, 2)
@@ -318,6 +330,8 @@ model BudgetAllocation {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
+
+  @@index([budgetId, category])
 }
 
 //////////////////////////////
@@ -340,14 +354,20 @@ model ProcurementRequest {
   id          Int               @id @default(autoincrement())
   title       String
   description String?
+  unit        String
   amount      Decimal           @db.Decimal(15, 2)
   status      ProcurementStatus @default(DRAFT)
+
+  fiscalYearId Int
+fiscalYear   FiscalYear @relation(fields: [fiscalYearId], references: [id])
+
 
   allocationId Int
   vendorId     Int?
 
   allocation BudgetAllocation @relation(fields: [allocationId], references: [id])
   vendor     Vendor?          @relation(fields: [vendorId], references: [id])
+  
 
   approvals Approval[]
   items     ProcurementItem[]

@@ -258,3 +258,96 @@ export async function getProgramUtilization({
     limit,
   };
 }
+/* ===============================
+   ACCOMPLISHMENT REPORT
+   ONE ROW PER PROGRAM
+   Active Fiscal Year ONLY
+================================ */
+export async function getAccomplishmentReport({
+  search,
+  page = 1,
+  limit = 10,
+} = {}) {
+  const activeFY = await getActiveFiscalYear();
+
+  if (!activeFY) {
+    return { data: [], total: 0, page, limit };
+  }
+
+  const programs = await prisma.program.findMany({
+    where: {
+      deletedAt: null,
+      ...(search && {
+        name: {
+          contains: search,
+          mode: 'insensitive',
+        },
+      }),
+    },
+    include: {
+      allocations: {
+        where: {
+          budget: {
+            fiscalYearId: activeFY.id,
+          },
+        },
+        include: {
+          requests: {
+            where: {
+              deletedAt: null,
+              status: {
+                in: ['APPROVED', 'PURCHASED', 'COMPLETED'],
+              },
+            },
+            select: {
+              amount: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  const computed = programs.map(program => {
+    const totalAllocated = program.allocations.reduce(
+      (sum, allocation) =>
+        sum + Number(allocation.allocatedAmount),
+      0
+    );
+
+    const totalUsed = program.allocations.reduce(
+      (sum, allocation) =>
+        sum +
+        allocation.requests.reduce(
+          (reqSum, request) =>
+            reqSum + Number(request.amount),
+          0
+        ),
+      0
+    );
+
+    return {
+      programId: program.id,
+      programName: program.name,
+      description: program.description,
+      beneficiaries: program.beneficiaries,
+      startDate: program.startDate,
+      endDate: program.endDate,
+      allocated: totalAllocated,
+      used: totalUsed,
+      remaining: totalAllocated - totalUsed,
+      createdAt: program.createdAt,
+    };
+  });
+
+  // 🔥 Manual pagination (because computed is in memory)
+  const start = (page - 1) * limit;
+  const end = start + limit;
+
+  return {
+    data: computed.slice(start, end),
+    total: computed.length,
+    page,
+    limit,
+  };
+}

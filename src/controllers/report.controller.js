@@ -3,6 +3,7 @@ import {
   getBudgetSummary,
   getProcurementReport,
   getProgramUtilization,
+  getAccomplishmentReport,
 } from '../services/report.service.js';
 
 /* ===============================
@@ -99,6 +100,26 @@ export async function approvalReport(req, res) {
 ================================ */
 export async function programUtilization(req, res) {
   const result = await getProgramUtilization({
+    search: req.query.search,
+    page: Number(req.query.page) || 1,
+    limit: Number(req.query.limit) || 10,
+  });
+
+  res.json({
+    success: true,
+    data: result.data,
+    meta: {
+      total: result.total,
+      page: result.page,
+      limit: result.limit,
+    },
+  });
+}
+/* ===============================
+   ACCOMPLISHMENT REPORT
+================================ */
+export async function accomplishmentReport(req, res) {
+  const result = await getAccomplishmentReport({
     search: req.query.search,
     page: Number(req.query.page) || 1,
     limit: Number(req.query.limit) || 10,

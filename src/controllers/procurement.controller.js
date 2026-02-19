@@ -23,7 +23,8 @@ export const createRequest = async (req, res) => {
   try {
     const data = await procurementService.createRequest(
       req.body,
-      req.user.id
+      req.user.id,
+      req.activeFiscalYearId // 🔥 attach fiscal year
     );
 
     return sendSuccess(res, 201, {
@@ -142,7 +143,7 @@ export const completeRequest = async (req, res) => {
   }
 };
 
-/* ================= UPLOAD PROOF (UPDATED) ================= */
+/* ================= UPLOAD PROOF ================= */
 
 export const uploadProof = async (req, res) => {
   try {
@@ -155,6 +156,7 @@ export const uploadProof = async (req, res) => {
     }
 
     const requestId = Number(req.body.requestId);
+
     if (!requestId || Number.isNaN(requestId)) {
       throw {
         statusCode: 400,
@@ -171,7 +173,6 @@ export const uploadProof = async (req, res) => {
       };
     }
 
-    // ✅ CENTRALIZED UPLOAD
     const fileUrl = await uploadToCloudinary(
       req.file,
       process.env.CLOUDINARY_PROCUREMENT_FOLDER,
@@ -212,6 +213,7 @@ export const getAllRequests = async (req, res) => {
           : undefined,
       page: Number(req.query.page) || 1,
       limit: Number(req.query.limit) || 10,
+      fiscalYearId: req.activeFiscalYearId, // 🔥 FILTER BY ACTIVE FY
     });
 
     return sendSuccess(res, 200, result);

@@ -12,8 +12,8 @@ import { authMiddleware } from '../middlewares/auth.middleware.js';
 const router = Router();
 
 router.post('/',authMiddleware, createFiscalYear);
-router.get('/',authMiddleware, getFiscalYears);
-router.get('/:id',authMiddleware, getFiscalYear);
+router.get('/', getFiscalYears);
+router.get('/:id', getFiscalYear);
 router.put('/:id', authMiddleware, updateFiscalYear);
 router.delete('/:id', authMiddleware, deleteFiscalYear);
 
