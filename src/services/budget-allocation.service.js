@@ -134,9 +134,11 @@ export const getAllBudgetAllocations = async (params = {}) => {
   const {
     search,
     budgetId,
+    fiscalYearId, // ✅ ADD THIS
     programId,
     classificationId,
     objectOfExpenditureId,
+    category,
     page = 1,
     limit = 10,
     sortBy = 'createdAt',
@@ -155,10 +157,13 @@ export const getAllBudgetAllocations = async (params = {}) => {
 
   /* ================= WHERE ================= */
   const where = { deletedAt: null };
-
-  if (Number.isFinite(budgetId)) {
-    where.budgetId = budgetId;
-  }
+  if (fiscalYearId) {
+  where.budget = {
+    fiscalYearId: Number(fiscalYearId),
+  };
+} else if (budgetId) {
+  where.budgetId = Number(budgetId);
+}
 
   if (Number.isFinite(programId)) {
     where.programId = programId;

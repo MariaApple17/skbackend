@@ -25,22 +25,25 @@ export const createBudgetAllocation = async (req, res) => {
 /* ================= GET ALL ================= */
 export const getAllBudgetAllocations = async (req, res) => {
   try {
-    const {
-      search,
-      budgetId,
-      programId,
-      classificationId,
-      objectOfExpenditureId,
-      page,
-      limit,
-      sortBy,
-      sortOrder,
-    } = req.query;
+   const {
+  search,
+  budgetId,
+  fiscalYearId, // ✅ ADD THIS
+  programId,
+  classificationId,
+  objectOfExpenditureId,
+  category,
+  page,
+  limit,
+  sortBy,
+  sortOrder,
+} = req.query;
 
     const result =
       await budgetAllocationService.getAllBudgetAllocations({
         search: search || undefined,
         budgetId: budgetId ? Number(budgetId) : undefined,
+        fiscalYearId: fiscalYearId ? Number(fiscalYearId) : undefined,
         programId: programId ? Number(programId) : undefined,
         classificationId: classificationId
           ? Number(classificationId)
@@ -48,6 +51,7 @@ export const getAllBudgetAllocations = async (req, res) => {
         objectOfExpenditureId: objectOfExpenditureId
           ? Number(objectOfExpenditureId)
           : undefined,
+        category: category || undefined, // ✅ PASS IT
         page: page ? Number(page) : undefined,
         limit: limit ? Number(limit) : undefined,
         sortBy,
@@ -60,8 +64,6 @@ export const getAllBudgetAllocations = async (req, res) => {
       pagination: result.pagination,
     });
   } catch (error) {
-    console.error('Get Budget Allocations Error:', error);
-
     return res.status(500).json({
       success: false,
       message: error?.message || 'Failed to fetch budget allocations',
