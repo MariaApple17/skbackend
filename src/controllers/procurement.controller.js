@@ -9,13 +9,28 @@ const sendSuccess = (res, status = 200, payload = {}) =>
     ...payload,
   });
 
-const sendError = (res, error) =>
-  res.status(error.statusCode || 400).json({
+const sendError = (res, error) => {
+  console.error('PROCUREMENT ERROR:', error);
+
+  return res.status(error.statusCode || 500).json({
     success: false,
-    message: error.message || 'Bad request',
-    code: error.code || 'BAD_REQUEST',
+    message: error.message || 'Internal server error',
+    code: error.code || 'INTERNAL_SERVER_ERROR',
     details: error.details ?? null,
   });
+};
+
+const parseId = (value, name = 'id') => {
+  const n = Number(value);
+  if (!Number.isFinite(n)) {
+    throw {
+      statusCode: 400,
+      message: `Invalid ${name}`,
+      code: 'INVALID_ID',
+    };
+  }
+  return n;
+};
 
 /* ================= CREATE REQUEST ================= */
 
@@ -24,7 +39,7 @@ export const createRequest = async (req, res) => {
     const data = await procurementService.createRequest(
       req.body,
       req.user.id,
-      req.activeFiscalYearId // 🔥 attach fiscal year
+      req.activeFiscalYearId
     );
 
     return sendSuccess(res, 201, {
@@ -40,8 +55,10 @@ export const createRequest = async (req, res) => {
 
 export const updateRequest = async (req, res) => {
   try {
+    const id = parseId(req.params.id, 'requestId');
+
     const data = await procurementService.updateRequest(
-      Number(req.params.id),
+      id,
       req.body
     );
 
@@ -58,9 +75,9 @@ export const updateRequest = async (req, res) => {
 
 export const submitRequest = async (req, res) => {
   try {
-    const data = await procurementService.submitRequest(
-      Number(req.params.id)
-    );
+    const id = parseId(req.params.id, 'requestId');
+
+    const data = await procurementService.submitRequest(id);
 
     return sendSuccess(res, 200, {
       message: 'Procurement request submitted',
@@ -75,10 +92,12 @@ export const submitRequest = async (req, res) => {
 
 export const approveRequest = async (req, res) => {
   try {
+    const id = parseId(req.params.id, 'requestId');
+
     const data = await procurementService.approveRequest(
-      Number(req.params.id),
+      id,
       req.user.id,
-      req.body.remarks ?? null
+      req.body?.remarks ?? null
     );
 
     return sendSuccess(res, 200, {
@@ -94,10 +113,12 @@ export const approveRequest = async (req, res) => {
 
 export const rejectRequest = async (req, res) => {
   try {
+    const id = parseId(req.params.id, 'requestId');
+
     const data = await procurementService.rejectRequest(
-      Number(req.params.id),
+      id,
       req.user.id,
-      req.body.remarks ?? null
+      req.body?.remarks ?? null
     );
 
     return sendSuccess(res, 200, {
@@ -113,9 +134,9 @@ export const rejectRequest = async (req, res) => {
 
 export const markPurchased = async (req, res) => {
   try {
-    const data = await procurementService.markPurchased(
-      Number(req.params.id)
-    );
+    const id = parseId(req.params.id, 'requestId');
+
+    const data = await procurementService.markPurchased(id);
 
     return sendSuccess(res, 200, {
       message: 'Procurement request marked as purchased',
@@ -130,9 +151,9 @@ export const markPurchased = async (req, res) => {
 
 export const completeRequest = async (req, res) => {
   try {
-    const data = await procurementService.completeRequest(
-      Number(req.params.id)
-    );
+    const id = parseId(req.params.id, 'requestId');
+
+    const data = await procurementService.completeRequest(id);
 
     return sendSuccess(res, 200, {
       message: 'Procurement request completed',
@@ -155,17 +176,9 @@ export const uploadProof = async (req, res) => {
       };
     }
 
-    const requestId = Number(req.body.requestId);
+    const requestId = parseId(req.body.requestId, 'requestId');
 
-    if (!requestId || Number.isNaN(requestId)) {
-      throw {
-        statusCode: 400,
-        message: 'Valid requestId is required',
-        code: 'INVALID_REQUEST_ID',
-      };
-    }
-
-    if (!req.body.type) {
+    if (!req.body.type?.trim()) {
       throw {
         statusCode: 400,
         message: 'Proof type is required',
@@ -181,8 +194,8 @@ export const uploadProof = async (req, res) => {
 
     const payload = {
       requestId,
-      type: req.body.type,
-      description: req.body.description || null,
+      type: req.body.type.trim(),
+      description: req.body.description?.trim() || null,
       fileUrl,
     };
 
@@ -196,7 +209,6 @@ export const uploadProof = async (req, res) => {
       data,
     });
   } catch (error) {
-    console.error('UPLOAD PROOF ERROR:', error);
     return sendError(res, error);
   }
 };
@@ -213,7 +225,7 @@ export const getAllRequests = async (req, res) => {
           : undefined,
       page: Number(req.query.page) || 1,
       limit: Number(req.query.limit) || 10,
-      fiscalYearId: req.activeFiscalYearId, // 🔥 FILTER BY ACTIVE FY
+      fiscalYearId: req.activeFiscalYearId,
     });
 
     return sendSuccess(res, 200, result);
@@ -226,9 +238,9 @@ export const getAllRequests = async (req, res) => {
 
 export const deleteRequest = async (req, res) => {
   try {
-    await procurementService.deleteRequest(
-      Number(req.params.id)
-    );
+    const id = parseId(req.params.id, 'requestId');
+
+    await procurementService.deleteRequest(id);
 
     return sendSuccess(res, 200, {
       message: 'Procurement request deleted successfully',
@@ -242,9 +254,9 @@ export const deleteRequest = async (req, res) => {
 
 export const getDraftRequest = async (req, res) => {
   try {
-    const data = await procurementService.getDraftRequestById(
-      Number(req.params.id)
-    );
+    const id = parseId(req.params.id, 'requestId');
+
+    const data = await procurementService.getDraftRequestById(id);
 
     return sendSuccess(res, 200, { data });
   } catch (error) {

@@ -20,23 +20,51 @@ const toNumber = (v, name = 'id') => {
 };
 
 const normalizeItems = (items = []) => {
-  if (!Array.isArray(items)) return [];
+  if (!Array.isArray(items) || items.length === 0) {
+    throw new AppError(
+      'At least one procurement item is required',
+      400,
+      'EMPTY_ITEMS'
+    );
+  }
 
-  return items
-    .filter(i => i && typeof i === 'object')
-    .map(i => {
-      const quantity = Math.max(1, Number(i.quantity) || 1);
-      const unitCost = Math.max(0, Number(i.unitCost ?? i.unitPrice) || 0);
+  return items.map((i, index) => {
+    if (!i?.name?.trim()) {
+      throw new AppError(
+        `Item name is required (item ${index + 1})`,
+        400,
+        'ITEM_NAME_REQUIRED'
+      );
+    }
 
-      return {
-        name: i.name?.trim(),
-        description: i.description ?? null,
-        quantity,
-        unitCost,
-        totalPrice: quantity * unitCost,
-      };
-    })
-    .filter(i => i.name);
+    if (!i?.unit?.trim()) {
+      throw new AppError(
+        `Unit is required for item: ${i.name}`,
+        400,
+        'ITEM_UNIT_REQUIRED'
+      );
+    }
+
+    const quantity = Math.max(1, Number(i.quantity) || 1);
+    const unitCost = Math.max(0, Number(i.unitCost) || 0);
+
+    if (unitCost <= 0) {
+      throw new AppError(
+        `Unit cost must be greater than zero for item: ${i.name}`,
+        400,
+        'INVALID_UNIT_COST'
+      );
+    }
+
+    return {
+      name: i.name.trim(),
+      description: i.description ?? null,
+      unit: i.unit.trim(), // ✅ unit saved per item
+      quantity,
+      unitCost,
+      totalPrice: quantity * unitCost,
+    };
+  });
 };
 
 const VALID_STATUSES = [
@@ -50,33 +78,23 @@ const VALID_STATUSES = [
 
 /* ================= CREATE REQUEST ================= */
 export const createRequest = async (data, userId, fiscalYearId) => {
-  const allocationId = toNumber(data.allocationId, 'allocationId');
-  const items = normalizeItems(data.items);
-  const unit = data.unit?.trim();
-
-  if (!unit) {
-    throw new AppError('Unit is required', 400, 'UNIT_REQUIRED');
-  }
-
-  if (!items.length) {
+  if (!fiscalYearId) {
     throw new AppError(
-      'At least one procurement item is required',
+      'No active fiscal year found',
       400,
-      'EMPTY_ITEMS'
+      'NO_FISCAL_YEAR'
     );
   }
+
+  const allocationId = toNumber(data.allocationId, 'allocationId');
+  const items = normalizeItems(data.items);
 
   const computedAmount = items.reduce(
     (sum, i) => sum + i.totalPrice,
     0
   );
 
-  const amount =
-    data.amount != null
-      ? toNumber(data.amount, 'amount')
-      : computedAmount;
-
-  if (amount <= 0) {
+  if (computedAmount <= 0) {
     throw new AppError(
       'Total amount must be greater than zero',
       400,
@@ -88,17 +106,16 @@ export const createRequest = async (data, userId, fiscalYearId) => {
     data: {
       title: data.title?.trim(),
       description: data.description ?? null,
-      unit,
-      amount,
+      amount: computedAmount,
       allocationId,
-      fiscalYearId,
-      vendorId: data.vendorId
-        ? toNumber(data.vendorId, 'vendorId')
-        : null,
+      fiscalYearId: toNumber(fiscalYearId, 'fiscalYearId'), // ✅ REQUIRED
       createdById: toNumber(userId, 'userId'),
       items: { create: items },
     },
-    include: { items: true, allocation: true },
+    include: {
+      items: true,
+      allocation: true,
+    },
   });
 };
 
@@ -141,7 +158,7 @@ export const updateRequest = async (id, data) => {
 };
 
 /* ================= SUBMIT REQUEST ================= */
-export const submitRequest = async id => {
+export const submitRequest = async (id) => {
   id = toNumber(id, 'requestId');
 
   const request = await db.procurementRequest.findFirst({
@@ -157,7 +174,8 @@ export const submitRequest = async id => {
     throw new AppError(
       'Only draft requests can be submitted',
       400,
-      'INVALID_STATUS_TRANSITION'
+      'INVALID_STATUS_TRANSITION',
+      { currentStatus: request.status }
     );
   }
 
@@ -194,7 +212,8 @@ export const approveRequest = async (requestId, approverId, remarks) => {
       throw new AppError(
         'Only submitted requests can be approved',
         400,
-        'INVALID_STATUS_TRANSITION'
+        'INVALID_STATUS_TRANSITION',
+        { currentStatus: request.status }
       );
     }
 
@@ -207,7 +226,10 @@ export const approveRequest = async (requestId, approverId, remarks) => {
         'Insufficient budget allocation',
         400,
         'INSUFFICIENT_BUDGET',
-        { requested: request.amount, remaining }
+        {
+          requested: request.amount,
+          remaining,
+        }
       );
     }
 
@@ -253,7 +275,8 @@ export const rejectRequest = async (requestId, approverId, remarks) => {
       throw new AppError(
         'Only submitted requests can be rejected',
         400,
-        'INVALID_STATUS_TRANSITION'
+        'INVALID_STATUS_TRANSITION',
+        { currentStatus: request.status }
       );
     }
 
@@ -289,7 +312,8 @@ export const markPurchased = async requestId => {
     throw new AppError(
       'Request must be approved before purchase',
       400,
-      'INVALID_STATUS_TRANSITION'
+      'INVALID_STATUS_TRANSITION',
+      { currentStatus: request.status }
     );
   }
 
@@ -317,13 +341,16 @@ export const completeRequest = async requestId => {
       throw new AppError(
         'Only purchased requests can be completed',
         400,
-        'INVALID_STATUS_TRANSITION'
+        'INVALID_STATUS_TRANSITION',
+        { currentStatus: request.status }
       );
     }
 
     await tx.budgetAllocation.update({
       where: { id: request.allocationId },
-      data: { usedAmount: { increment: request.amount } },
+      data: {
+        usedAmount: { increment: request.amount },
+      },
     });
 
     return tx.procurementRequest.update({
@@ -358,25 +385,61 @@ export const uploadProof = async (data, userId) => {
 
 /* ================= GET ALL REQUESTS ================= */
 export const getAllRequests = async ({
-  q = '',
+  q,
   status,
   page = 1,
   limit = 10,
   fiscalYearId,
 }) => {
-  page = toNumber(page, 'page');
-  limit = toNumber(limit, 'limit');
+  page = Number(page) || 1;
+  limit = Number(limit) || 10;
+
+  page = Math.max(1, page);
+  limit = Math.min(100, Math.max(1, limit));
+
+  if (!fiscalYearId) {
+    throw new AppError(
+      'No active fiscal year found',
+      400,
+      'NO_FISCAL_YEAR'
+    );
+  }
 
   if (status && !VALID_STATUSES.includes(status)) {
-    throw new AppError('Invalid request status', 400, 'INVALID_STATUS');
+    throw new AppError(
+      'Invalid request status',
+      400,
+      'INVALID_STATUS'
+    );
   }
 
   const where = {
     deletedAt: null,
-    ...(fiscalYearId && { fiscalYearId }),
-    ...(q && { title: { contains: q } }),
-    ...(status && { status }),
+    fiscalYearId: Number(fiscalYearId), // ✅ FISCAL YEAR FILTER
   };
+
+  /* ================= SEARCH ================= */
+  if (typeof q === 'string' && q.trim() !== '') {
+    where.OR = [
+      {
+        title: {
+          contains: q.trim(),
+          mode: 'insensitive',
+        },
+      },
+      {
+        description: {
+          contains: q.trim(),
+          mode: 'insensitive',
+        },
+      },
+    ];
+  }
+
+  /* ================= STATUS FILTER ================= */
+  if (status) {
+    where.status = status;
+  }
 
   const skip = (page - 1) * limit;
 
@@ -409,8 +472,8 @@ export const getAllRequests = async ({
 
   const data = rows.map(r => ({
     ...r,
-    latestRemark: r.approvals[0]?.remarks ?? null,
-    latestDecision: r.approvals[0]?.status ?? null,
+    latestRemark: r.approvals?.[0]?.remarks ?? null,
+    latestDecision: r.approvals?.[0]?.status ?? null,
   }));
 
   return {
@@ -440,7 +503,8 @@ export const deleteRequest = async id => {
     throw new AppError(
       'Only draft requests can be deleted',
       400,
-      'INVALID_STATUS_TRANSITION'
+      'INVALID_STATUS_TRANSITION',
+      { currentStatus: request.status }
     );
   }
 

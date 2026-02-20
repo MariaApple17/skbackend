@@ -232,9 +232,10 @@ model FiscalYear {
   isActive Boolean @default(false)
 
   budgets        Budget[]
-  requests ProcurementRequest[]
   systemProfile  SystemProfile?
   skOfficials    SkOfficial[]
+  procurementRequests ProcurementRequest[]
+
 
   createdAt DateTime  @default(now())
   deletedAt DateTime?
@@ -354,12 +355,12 @@ model ProcurementRequest {
   id          Int               @id @default(autoincrement())
   title       String
   description String?
-  unit        String
+ 
   amount      Decimal           @db.Decimal(15, 2)
   status      ProcurementStatus @default(DRAFT)
 
-  fiscalYearId Int
-fiscalYear   FiscalYear @relation(fields: [fiscalYearId], references: [id])
+    fiscalYearId Int
+  fiscalYear   FiscalYear @relation(fields: [fiscalYearId], references: [id])
 
 
   allocationId Int
@@ -387,6 +388,7 @@ model ProcurementItem {
 
   name        String
   description String? // ✅ ADDED
+ unit String?
   quantity    Int
   unitCost    Decimal @db.Decimal(15, 2)
   totalPrice  Decimal @db.Decimal(15, 2) // ✅ RECOMMENDED
