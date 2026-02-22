@@ -113,9 +113,15 @@ export const createRequest = async (data, userId, fiscalYearId) => {
       items: { create: items },
     },
     include: {
-      items: true,
-      allocation: true,
+  items: true,
+  allocation: {
+    include: {
+      program: true,
+      classification: true,
+      object: true,
     },
+  },
+},
   });
 };
 
@@ -450,22 +456,28 @@ export const getAllRequests = async ({
       take: limit,
       orderBy: { createdAt: 'desc' },
       include: {
-        items: true,
-        proofs: true,
-        vendor: true,
-        allocation: true,
-        createdBy: true,
-        approvals: {
-          orderBy: { createdAt: 'desc' },
-          select: {
-            id: true,
-            status: true,
-            remarks: true,
-            approverId: true,
-            createdAt: true,
-          },
-        },
-      },
+  items: true,
+  proofs: true,
+  vendor: true,
+  allocation: {
+    include: {
+      program: true,
+      classification: true,
+      object: true,
+    }
+  },
+  createdBy: true,
+  approvals: {
+    orderBy: { createdAt: 'desc' },
+    select: {
+      id: true,
+      status: true,
+      remarks: true,
+      approverId: true,
+      createdAt: true,
+    },
+  },
+},
     }),
     db.procurementRequest.count({ where }),
   ]);
