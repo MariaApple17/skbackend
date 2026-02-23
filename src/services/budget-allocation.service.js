@@ -22,25 +22,31 @@ const assertPositiveAmount = (amount) => {
 const validateClassificationLimit = async ({
   budgetId,
   classificationId,
+  category,
   allocatedAmount,
   excludeAllocationId = null,
 }) => {
-  const classificationLimit = await db.budgetClassificationLimit.findFirst({
-    where: {
-      budgetId,
-      classificationId,
-    },
-  });
+  const classificationLimit =
+    await db.budgetClassificationLimit.findUnique({
+      where: {
+        budgetId_classificationId_category: {
+          budgetId: Number(budgetId),
+          classificationId: Number(classificationId),
+          category,
+        },
+      },
+    });
 
   if (!classificationLimit) {
     throw new Error(
-      'Classification limit not set for this budget. Please set a limit first.'
+      'Classification limit not set for this budget and category.'
     );
   }
 
   const whereClause = {
-    budgetId,
-    classificationId,
+    budgetId: Number(budgetId),
+    classificationId: Number(classificationId),
+    category,
     deletedAt: null,
   };
 
@@ -53,17 +59,21 @@ const validateClassificationLimit = async ({
     _sum: { allocatedAmount: true },
   });
 
-  const usedAllocation = Number(allocatedSoFar._sum.allocatedAmount || 0);
-  const remainingLimit = Number(classificationLimit.limitAmount) - usedAllocation;
+  const totalAllocated =
+    Number(allocatedSoFar._sum.allocatedAmount || 0);
 
-  if (Number(allocatedAmount) > remainingLimit) {
+  const remaining =
+    Number(classificationLimit.limitAmount) - totalAllocated;
+
+  if (Number(allocatedAmount) > remaining) {
     throw new Error(
-      `Allocated amount exceeds remaining classification limit. Remaining: ₱${remainingLimit.toLocaleString()}`
+      `Allocated amount exceeds remaining classification limit. Remaining: ₱${remaining.toLocaleString()}`
     );
   }
 
-  return { classificationLimit, usedAllocation, remainingLimit };
+  return { classificationLimit, totalAllocated, remaining };
 };
+
 export const createBudgetAllocation = async (payload) => {
   const {
     budgetId,
@@ -104,10 +114,11 @@ export const createBudgetAllocation = async (payload) => {
 
   /* ---------------- CLASSIFICATION LIMIT CHECK ---------------- */
   await validateClassificationLimit({
-    budgetId,
-    classificationId,
-    allocatedAmount,
-  });
+  budgetId,
+  classificationId,
+  category,
+  allocatedAmount,
+});
 
   /* ---------------- CREATE ---------------- */
   return db.budgetAllocation.create({
@@ -255,13 +266,13 @@ export const updateBudgetAllocation = async (id, payload) => {
   /* ---------------- ALLOCATED AMOUNT UPDATE ---------------- */
   if (payload.allocatedAmount !== undefined) {
     assertPositiveAmount(payload.allocatedAmount);
-
-    await validateClassificationLimit({
-      budgetId: existing.budgetId,
-      classificationId: existing.classificationId,
-      allocatedAmount: payload.allocatedAmount,
-      excludeAllocationId: id,
-    });
+await validateClassificationLimit({
+  budgetId: existing.budgetId,
+  classificationId: existing.classificationId,
+  category: existing.category, // ✅ ADD THIS
+  allocatedAmount: payload.allocatedAmount,
+  excludeAllocationId: id,
+});
 
     if (
       payload.usedAmount !== undefined &&
@@ -386,7 +397,11 @@ export const getProgramBudgetSummary = async () => {
 /* =====================================================
    GET REMAINING CLASSIFICATION LIMIT FOR ALLOCATION
 ===================================================== */
-export const getRemainingClassificationLimit = async (budgetId, classificationId) => {
+export const getRemainingClassificationLimit = async (
+  budgetId,
+  classificationId,
+  category
+) => {
   if (!Number.isInteger(Number(budgetId))) {
     throw new Error('Invalid budgetId');
   }
@@ -395,21 +410,29 @@ export const getRemainingClassificationLimit = async (budgetId, classificationId
     throw new Error('Invalid classificationId');
   }
 
-  const classificationLimit = await db.budgetClassificationLimit.findFirst({
-    where: {
-      budgetId: Number(budgetId),
-      classificationId: Number(classificationId),
-    },
-    include: {
-      classification: {
-        select: {
-          id: true,
-          code: true,
-          name: true,
+  if (!category) {
+    throw new Error('Category is required');
+  }
+
+  const classificationLimit =
+    await db.budgetClassificationLimit.findUnique({
+      where: {
+        budgetId_classificationId_category: {
+          budgetId: Number(budgetId),
+          classificationId: Number(classificationId),
+          category,
         },
       },
-    },
-  });
+      include: {
+        classification: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+          },
+        },
+      },
+    });
 
   if (!classificationLimit) {
     throw new Error('Classification limit not set for this budget');
@@ -419,20 +442,57 @@ export const getRemainingClassificationLimit = async (budgetId, classificationId
     where: {
       budgetId: Number(budgetId),
       classificationId: Number(classificationId),
+      category,
       deletedAt: null,
     },
     _sum: { allocatedAmount: true },
   });
 
-  const totalAllocated = Number(allocatedSoFar._sum.allocatedAmount || 0);
+  const totalAllocated =
+    Number(allocatedSoFar._sum.allocatedAmount || 0);
+
   const limitAmount = Number(classificationLimit.limitAmount);
-  const remaining = limitAmount - totalAllocated;
 
   return {
     classificationId: Number(classificationId),
     classification: classificationLimit.classification,
     limitAmount,
     totalAllocated,
-    remaining,
+    remaining: limitAmount - totalAllocated,
+  };
+};
+/* ================= CHECK EXISTING OBJECT ALLOCATION ================= */
+export const checkExistingObjectAllocation = async ({
+  budgetId,
+  classificationId,
+  category,
+  objectOfExpenditureId,
+}) => {
+  const existing = await db.budgetAllocation.findFirst({
+    where: {
+      budgetId: Number(budgetId),
+      classificationId: Number(classificationId),
+      category,
+      objectOfExpenditureId: Number(objectOfExpenditureId),
+      deletedAt: null,
+    },
+  });
+
+  if (!existing) {
+    return {
+      exists: false,
+    };
+  }
+
+  return {
+    exists: true,
+    allocation: {
+      id: existing.id,
+      allocatedAmount: Number(existing.allocatedAmount),
+      usedAmount: Number(existing.usedAmount),
+      remaining:
+        Number(existing.allocatedAmount) -
+        Number(existing.usedAmount),
+    },
   };
 };

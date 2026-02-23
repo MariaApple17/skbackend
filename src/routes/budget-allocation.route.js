@@ -6,9 +6,11 @@ import {
   getAllBudgetAllocations,
   getBudgetAllocationById,
   getProgramBudgetSummary,
-  getRemainingClassificationLimit,
+  getRemainingController, // ✅ FIXED
   updateBudgetAllocation,
+  checkExistingObjectAllocationController,
 } from '../controllers/budget-allocation.controller.js';
+
 import { authMiddleware } from '../middlewares/auth.middleware.js';
 
 const router = express.Router();
@@ -24,6 +26,15 @@ router.delete('/:id', authMiddleware, deleteBudgetAllocation);
 router.get('/reports/program-summary', authMiddleware, getProgramBudgetSummary);
 
 /* GET REMAINING CLASSIFICATION LIMIT */
-router.get('/remaining/:budgetId/:classificationId', authMiddleware, getRemainingClassificationLimit);
+router.get(
+  '/remaining/:budgetId/:classificationId',
+  authMiddleware,
+  getRemainingController // ✅ FIXED
+);
+router.get(
+  '/check-object',
+  authMiddleware,
+  checkExistingObjectAllocationController
+);
 
 export default router;

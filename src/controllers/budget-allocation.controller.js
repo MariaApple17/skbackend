@@ -154,14 +154,17 @@ export const getProgramBudgetSummary = async (_req, res) => {
 };
 
 /* ================= GET REMAINING CLASSIFICATION LIMIT ================= */
-export const getRemainingClassificationLimit = async (req, res) => {
+/* ================= GET REMAINING CLASSIFICATION LIMIT ================= */
+export const getRemainingController = async (req, res) => {
   try {
     const { budgetId, classificationId } = req.params;
+    const { category } = req.query;
 
     const data =
       await budgetAllocationService.getRemainingClassificationLimit(
         Number(budgetId),
-        Number(classificationId)
+        Number(classificationId),
+        category
       );
 
     return res.status(200).json({
@@ -169,9 +172,35 @@ export const getRemainingClassificationLimit = async (req, res) => {
       data,
     });
   } catch (error) {
-    const status = getErrorStatus(error.message);
+    return res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+export const checkExistingObjectAllocationController = async (req, res) => {
+  try {
+    const {
+      budgetId,
+      classificationId,
+      category,
+      objectOfExpenditureId,
+    } = req.query;
 
-    return res.status(status).json({
+    const data =
+      await budgetAllocationService.checkExistingObjectAllocation({
+        budgetId,
+        classificationId,
+        category,
+        objectOfExpenditureId,
+      });
+
+    return res.status(200).json({
+      success: true,
+      data,
+    });
+  } catch (error) {
+    return res.status(400).json({
       success: false,
       message: error.message,
     });

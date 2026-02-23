@@ -1,7 +1,7 @@
 import { db } from '../config/db.config.js';
 
 /* ======================================================
-   CREATE PROGRAM (UPDATED: NO imageUrl)
+   CREATE PROGRAM (ASSIGN TO ACTIVE FISCAL YEAR)
 ====================================================== */
 export const createProgramService = async (data) => {
   const {
@@ -13,16 +13,25 @@ export const createProgramService = async (data) => {
     startDate,
     endDate,
     isActive = true,
-    documents = [], // ✅ optional array of images
+    documents = [],
   } = data;
 
-  // check unique code
+  // ✅ Check unique code
   const existing = await db.program.findFirst({
     where: { code, deletedAt: null },
   });
 
   if (existing) {
     throw new Error('Program code already exists');
+  }
+
+  // ✅ Get active fiscal year
+  const activeFiscalYear = await db.fiscalYear.findFirst({
+    where: { isActive: true, deletedAt: null },
+  });
+
+  if (!activeFiscalYear) {
+    throw new Error('No active fiscal year found');
   }
 
   return db.program.create({
@@ -35,9 +44,9 @@ export const createProgramService = async (data) => {
       startDate: new Date(startDate),
       endDate: new Date(endDate),
       isActive,
+      fiscalYearId: activeFiscalYear.id, // 🔥 always link to active FY
 
-      // ✅ CREATE DOCUMENT IMAGES (OPTIONAL)
-      ...(Array.isArray(documents) && documents.length > 0 && {
+      ...(documents.length > 0 && {
         documents: {
           create: documents.map((d) => ({
             imageUrl: d.imageUrl,
@@ -48,14 +57,12 @@ export const createProgramService = async (data) => {
         },
       }),
     },
-    include: {
-      documents: true,
-    },
+    include: { documents: true },
   });
 };
 
 /* ======================================================
-   GET ALL PROGRAMS (SEARCH, FILTER, SORT, PAGINATION)
+   GET ALL PROGRAMS (ONLY ACTIVE FISCAL YEAR)
 ====================================================== */
 export const getAllProgramsService = async (query) => {
   const {
@@ -69,8 +76,27 @@ export const getAllProgramsService = async (query) => {
     limit = 10,
   } = query;
 
+  // ✅ Get active fiscal year (DO NOT CRASH)
+  const activeFiscalYear = await db.fiscalYear.findFirst({
+    where: { isActive: true, deletedAt: null },
+  });
+
+  if (!activeFiscalYear) {
+    // return empty safely instead of crashing
+    return {
+      data: [],
+      meta: {
+        total: 0,
+        page: 1,
+        limit: Number(limit),
+        totalPages: 0,
+      },
+    };
+  }
+
   const where = {
     deletedAt: null,
+    fiscalYearId: activeFiscalYear.id, // 🔥 FILTER HERE
 
     ...(isActive !== undefined && {
       isActive: isActive === 'true',
@@ -78,11 +104,11 @@ export const getAllProgramsService = async (query) => {
 
     ...(q && {
       OR: [
-        { code: { contains: q, } },
-        { name: { contains: q,  } },
-        { description: { contains: q, } },
-        { committeeInCharge: { contains: q, } },
-        { beneficiaries: { contains: q,} },
+        { code: { contains: q } },
+        { name: { contains: q } },
+        { description: { contains: q } },
+        { committeeInCharge: { contains: q } },
+        { beneficiaries: { contains: q } },
       ],
     }),
 
@@ -102,9 +128,7 @@ export const getAllProgramsService = async (query) => {
       orderBy: { [sortBy]: sortOrder },
       skip,
       take: Number(limit),
-      include: {
-        documents: true, // ✅ INCLUDE DOCUMENT IMAGES
-      },
+      include: { documents: true },
     }),
     db.program.count({ where }),
   ]);
@@ -121,14 +145,12 @@ export const getAllProgramsService = async (query) => {
 };
 
 /* ======================================================
-   GET PROGRAM BY ID (WITH DOCUMENTS)
+   GET PROGRAM BY ID
 ====================================================== */
 export const getProgramByIdService = async (id) => {
   const program = await db.program.findFirst({
     where: { id: Number(id), deletedAt: null },
-    include: {
-      documents: true, // ✅ INCLUDE DOCUMENT IMAGES
-    },
+    include: { documents: true },
   });
 
   if (!program) {
@@ -139,7 +161,7 @@ export const getProgramByIdService = async (id) => {
 };
 
 /* ======================================================
-   UPDATE PROGRAM (NO imageUrl, SAFE)
+   UPDATE PROGRAM
 ====================================================== */
 export const updateProgramService = async (id, data) => {
   const programId = Number(id);
@@ -152,98 +174,28 @@ export const updateProgramService = async (id, data) => {
     throw new Error('Program not found');
   }
 
-  const parseBoolean = (value) => {
-    if (value === true || value === 'true') return true;
-    if (value === false || value === 'false') return false;
-    return undefined;
+  const updateData = {
+    ...(data.code && { code: data.code }),
+    ...(data.name && { name: data.name }),
+    ...(data.description && { description: data.description }),
+    ...(data.committeeInCharge && { committeeInCharge: data.committeeInCharge }),
+    ...(data.beneficiaries && { beneficiaries: data.beneficiaries }),
+    ...(data.isActive !== undefined && {
+      isActive: data.isActive === true || data.isActive === 'true',
+    }),
+    ...(data.startDate && { startDate: new Date(data.startDate) }),
+    ...(data.endDate && { endDate: new Date(data.endDate) }),
   };
-
-  const parseDate = (value) => {
-    if (value === undefined) return undefined;
-    const d = new Date(value);
-    if (Number.isNaN(d.getTime())) {
-      throw new Error(`Invalid date format: ${value}`);
-    }
-    return d;
-  };
-
-  const updateData = {};
-
-  if (typeof data.code === 'string') updateData.code = data.code;
-  if (typeof data.name === 'string') updateData.name = data.name;
-  if (typeof data.description === 'string')
-    updateData.description = data.description;
-  if (typeof data.committeeInCharge === 'string')
-    updateData.committeeInCharge = data.committeeInCharge;
-  if (typeof data.beneficiaries === 'string')
-    updateData.beneficiaries = data.beneficiaries;
-
-  const isActive = parseBoolean(data.isActive);
-  if (isActive !== undefined) updateData.isActive = isActive;
-
-  if (data.startDate !== undefined)
-    updateData.startDate = parseDate(data.startDate);
-  if (data.endDate !== undefined)
-    updateData.endDate = parseDate(data.endDate);
-
-  if (
-    updateData.startDate &&
-    updateData.endDate &&
-    updateData.startDate > updateData.endDate
-  ) {
-    throw new Error('Start date cannot be after end date');
-  }
 
   return db.program.update({
     where: { id: programId },
     data: updateData,
-    include: {
-      documents: true,
-    },
+    include: { documents: true },
   });
 };
 
 /* ======================================================
-   ADD PROGRAM DOCUMENT IMAGES (SEPARATE ENDPOINT)
-====================================================== */
-export const addProgramDocumentsService = async (id, documents) => {
-  const programId = Number(id);
-
-  // Verify program exists
-  const existing = await db.program.findFirst({
-    where: { id: programId, deletedAt: null },
-  });
-
-  if (!existing) {
-    throw new Error('Program not found');
-  }
-
-  // Validate documents array
-  if (!Array.isArray(documents) || documents.length === 0) {
-    throw new Error('No documents provided');
-  }
-
-  // Add documents to the program using update with create nested
-  return db.program.update({
-    where: { id: programId },
-    data: {
-      documents: {
-        create: documents.map((doc) => ({
-          imageUrl: doc.imageUrl,
-          title: doc.title ?? null,
-          description: doc.description ?? null,
-          uploadedBy: doc.uploadedBy ?? null,
-        })),
-      },
-    },
-    include: {
-      documents: true,
-    },
-  });
-};
-
-/* ======================================================
-   TOGGLE PROGRAM ACTIVE STATUS
+   TOGGLE STATUS
 ====================================================== */
 export const toggleProgramStatusService = async (id) => {
   const program = await getProgramByIdService(id);
@@ -255,7 +207,7 @@ export const toggleProgramStatusService = async (id) => {
 };
 
 /* ======================================================
-   SOFT DELETE PROGRAM (CASCADE DOCUMENTS)
+   SOFT DELETE
 ====================================================== */
 export const deleteProgramService = async (id) => {
   await getProgramByIdService(id);

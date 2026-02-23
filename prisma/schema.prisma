@@ -7,10 +7,294 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model SystemProfile {
+  id                Int        @id @default(autoincrement())
+  fiscalYearId      Int        @unique
+  systemName        String
+  systemDescription String?
+  logoUrl           String?
+  location          String?
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+  deletedAt         DateTime?
+  fiscalYear        FiscalYear @relation(fields: [fiscalYearId], references: [id])
+}
 
-//////////////////////////////
-// ENUMS
-//////////////////////////////
+model SkOfficial {
+  id              Int        @id @default(autoincrement())
+  fiscalYearId    Int
+  position        String
+  fullName        String
+  responsibility  String?
+  birthDate       DateTime
+  email           String?
+  gender          Gender
+  profileImageUrl String?
+  isActive        Boolean    @default(true)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  deletedAt       DateTime?
+  fiscalYear      FiscalYear @relation(fields: [fiscalYearId], references: [id])
+}
+
+/// ///////////////////////////
+/// ///////////////////////////
+model User {
+  id                  Int                  @id @default(autoincrement())
+  email               String               @unique
+  password            String
+  fullName            String
+  status              UserStatus           @default(ACTIVE)
+  roleId              Int
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  deletedAt           DateTime?
+  approvals           Approval[]
+  proofs              ProcurementProof[]
+  procurementRequests ProcurementRequest[]
+  logs                SystemLog[]
+  role                Role                 @relation(fields: [roleId], references: [id])
+}
+
+model Role {
+  id          Int              @id @default(autoincrement())
+  name        String           @unique
+  description String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  deletedAt   DateTime?
+  permissions RolePermission[]
+  users       User[]
+}
+
+model Permission {
+  id          Int               @id @default(autoincrement())
+  key         String            @unique
+  description String?
+  module      PermissionModule?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  deletedAt   DateTime?
+  roles       RolePermission[]
+}
+
+model RolePermission {
+  roleId       Int
+  permissionId Int
+  createdAt    DateTime   @default(now())
+  deletedAt    DateTime?
+  permission   Permission @relation(fields: [permissionId], references: [id])
+  role         Role       @relation(fields: [roleId], references: [id])
+
+  @@id([roleId, permissionId])
+}
+
+model Program {
+  id                Int                    @id @default(autoincrement())
+  code              String                 @unique
+  name              String
+  description       String?
+  committeeInCharge String
+  beneficiaries     String
+  startDate         DateTime
+  endDate           DateTime
+  isActive          Boolean                @default(true)
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+  deletedAt         DateTime?
+  fiscalYearId      Int?
+  allocations       BudgetAllocation[]
+  fiscalYear        FiscalYear?            @relation(fields: [fiscalYearId], references: [id])
+  documents         ProgramDocumentImage[]
+}
+
+model ProgramDocumentImage {
+  id          Int       @id @default(autoincrement())
+  programId   Int
+  /// *
+  ///    * Image file URL (Cloudinary / S3 / etc.)
+  imageUrl    String
+  /// *
+  ///    * Optional metadata
+  title       String?
+  description String?
+  uploadedBy  String?
+  createdAt   DateTime  @default(now())
+  deletedAt   DateTime?
+  program     Program   @relation(fields: [programId], references: [id], onDelete: Cascade)
+
+  @@index([programId])
+}
+
+model FiscalYear {
+  id                  Int                  @id @default(autoincrement())
+  year                Int                  @unique
+  isActive            Boolean              @default(false)
+  createdAt           DateTime             @default(now())
+  deletedAt           DateTime?
+  budgets             Budget?
+  procurementRequests ProcurementRequest[]
+  programs            Program[]
+  skOfficials         SkOfficial[]
+  systemProfile       SystemProfile?
+}
+
+model Budget {
+  id                   Int                         @id @default(autoincrement())
+  fiscalYearId         Int                         @unique
+  totalAmount          Decimal                     @db.Decimal(15, 2)
+  administrativeAmount Decimal                     @db.Decimal(15, 2)
+  youthAmount          Decimal                     @db.Decimal(15, 2)
+  createdAt            DateTime                    @default(now())
+  updatedAt            DateTime                    @updatedAt
+  deletedAt            DateTime?
+  fiscalYear           FiscalYear                  @relation(fields: [fiscalYearId], references: [id])
+  allocations          BudgetAllocation[]
+  classificationLimits BudgetClassificationLimit[]
+}
+
+model BudgetClassification {
+  id                Int                         @id @default(autoincrement())
+  code              String                      @unique
+  name              String
+  description       String?
+  allowedCategories BudgetCategory[]            @default([ADMINISTRATIVE, YOUTH])
+  createdAt         DateTime                    @default(now())
+  updatedAt         DateTime                    @updatedAt
+  deletedAt         DateTime?
+  allocations       BudgetAllocation[]
+  budgetLimits      BudgetClassificationLimit[]
+}
+
+model BudgetClassificationLimit {
+  id               Int                  @id @default(autoincrement())
+  budgetId         Int
+  classificationId Int
+  category         BudgetCategory
+  limitAmount      Decimal              @db.Decimal(15, 2)
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  budget           Budget               @relation(fields: [budgetId], references: [id])
+  classification   BudgetClassification @relation(fields: [classificationId], references: [id])
+
+  @@unique([budgetId, classificationId, category])
+  @@index([budgetId, category])
+}
+
+model ObjectOfExpenditure {
+  id          Int                @id @default(autoincrement())
+  code        String             @unique
+  name        String
+  description String?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  deletedAt   DateTime?
+  allocations BudgetAllocation[]
+}
+
+model BudgetAllocation {
+  id                    Int                  @id @default(autoincrement())
+  budgetId              Int
+  programId             Int
+  classificationId      Int
+  category              BudgetCategory
+  objectOfExpenditureId Int
+  allocatedAmount       Decimal              @db.Decimal(15, 2)
+  usedAmount            Decimal              @default(0) @db.Decimal(15, 2)
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+  deletedAt             DateTime?
+  budget                Budget               @relation(fields: [budgetId], references: [id])
+  classification        BudgetClassification @relation(fields: [classificationId], references: [id])
+  object                ObjectOfExpenditure  @relation(fields: [objectOfExpenditureId], references: [id])
+  program               Program              @relation(fields: [programId], references: [id])
+  requests              ProcurementRequest[]
+
+  @@index([budgetId, category])
+}
+
+model Vendor {
+  id        Int                  @id @default(autoincrement())
+  name      String
+  address   String?
+  contact   String?
+  createdAt DateTime             @default(now())
+  deletedAt DateTime?
+  requests  ProcurementRequest[]
+}
+
+model ProcurementRequest {
+  id           Int                @id @default(autoincrement())
+  title        String
+  description  String?
+  amount       Decimal            @db.Decimal(15, 2)
+  status       ProcurementStatus  @default(DRAFT)
+  fiscalYearId Int
+  allocationId Int
+  vendorId     Int?
+  createdById  Int
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  deletedAt    DateTime?
+  approvals    Approval[]
+  items        ProcurementItem[]
+  proofs       ProcurementProof[]
+  allocation   BudgetAllocation   @relation(fields: [allocationId], references: [id])
+  createdBy    User               @relation(fields: [createdById], references: [id])
+  fiscalYear   FiscalYear         @relation(fields: [fiscalYearId], references: [id])
+  vendor       Vendor?            @relation(fields: [vendorId], references: [id])
+}
+
+model ProcurementItem {
+  id          Int                @id @default(autoincrement())
+  requestId   Int
+  name        String
+  description String?
+  unit        String?
+  quantity    Int
+  unitCost    Decimal            @db.Decimal(15, 2)
+  totalPrice  Decimal            @db.Decimal(15, 2)
+  createdAt   DateTime           @default(now())
+  deletedAt   DateTime?
+  request     ProcurementRequest @relation(fields: [requestId], references: [id])
+}
+
+model ProcurementProof {
+  id           Int                @id @default(autoincrement())
+  requestId    Int
+  type         String
+  fileUrl      String
+  description  String?
+  uploadedById Int
+  createdAt    DateTime           @default(now())
+  deletedAt    DateTime?
+  request      ProcurementRequest @relation(fields: [requestId], references: [id])
+  uploadedBy   User               @relation(fields: [uploadedById], references: [id])
+}
+
+model Approval {
+  id         Int                @id @default(autoincrement())
+  requestId  Int
+  approverId Int
+  status     ApprovalStatus     @default(PENDING)
+  remarks    String?
+  createdAt  DateTime           @default(now())
+  deletedAt  DateTime?
+  approver   User               @relation(fields: [approverId], references: [id])
+  request    ProcurementRequest @relation(fields: [requestId], references: [id])
+}
+
+model SystemLog {
+  id        Int       @id @default(autoincrement())
+  level     LogLevel
+  message   String
+  context   String?
+  userId    Int?
+  createdAt DateTime  @default(now())
+  deletedAt DateTime?
+  user      User?     @relation(fields: [userId], references: [id])
+}
+
 
 enum UserStatus {
   ACTIVE
@@ -59,394 +343,4 @@ enum Gender {
 enum BudgetCategory {
   ADMINISTRATIVE
   YOUTH
-}
-
-
-model SystemProfile {
-  id Int @id @default(autoincrement())
-
-  fiscalYearId Int @unique
-  fiscalYear   FiscalYear @relation(fields: [fiscalYearId], references: [id])
-
-  systemName        String
-  systemDescription String?
-  logoUrl           String?
-  location          String?
-
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
-}
-
-model SkOfficial {
-  id Int @id @default(autoincrement())
-
-  fiscalYearId Int
-  fiscalYear   FiscalYear @relation(fields: [fiscalYearId], references: [id])
-
-  position        String
-  fullName        String
-  responsibility  String?
-  birthDate       DateTime
-  email           String?
-  gender          Gender
-
-  profileImageUrl String?   // ✅ ADDED (cloud image URL)
-
-  isActive        Boolean @default(true)
-
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
-}
-
-
-
-//////////////////////////////
-// USERS & RBAC
-//////////////////////////////
-model User {
-  id       Int        @id @default(autoincrement())
-  email    String     @unique
-  password String
-  fullName String
-  status   UserStatus @default(ACTIVE)
-
-  // ✅ SINGLE ROLE
-  roleId Int
-  role   Role @relation(fields: [roleId], references: [id])
-
-  approvals           Approval[]
-  logs                SystemLog[]
-  proofs              ProcurementProof[]
-  procurementRequests ProcurementRequest[]
-
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
-}
-
-model Role {
-  id          Int     @id @default(autoincrement())
-  name        String  @unique
-  description String?
-
-  users       User[]
-  permissions RolePermission[]
-
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
-}
-
-model Permission {
-  id          Int               @id @default(autoincrement())
-  key         String            @unique
-  description String?
-  module      PermissionModule?
-
-  roles RolePermission[]
-
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
-}
-
-model RolePermission {
-  roleId       Int
-  permissionId Int
-
-  role       Role       @relation(fields: [roleId], references: [id])
-  permission Permission @relation(fields: [permissionId], references: [id])
-
-  createdAt DateTime  @default(now())
-  deletedAt DateTime?
-
-  @@id([roleId, permissionId])
-}
-//////////////////////////////
-// PROGRAMS
-//////////////////////////////
-
-model Program {
-  id          Int     @id @default(autoincrement())
-  code        String  @unique
-  name        String
-  description String?
-
-  committeeInCharge String
-  beneficiaries     String
-  
-  startDate DateTime
-  endDate   DateTime
-  isActive  Boolean  @default(true)
-
-  // ❌ REMOVED
-  // imageUrl String?
-
-  // ✅ NEW RELATION
-  documents ProgramDocumentImage[]
-
-  allocations BudgetAllocation[]
-
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
-  
-  
-}
-
-//////////////////////////////
-// PROGRAM DOCUMENTATION IMAGES
-//////////////////////////////
-
-model ProgramDocumentImage {
-  id        Int    @id @default(autoincrement())
-  programId Int
-
-  /**
-   * Image file URL (Cloudinary / S3 / etc.)
-   */
-  imageUrl String
-
-  /**
-   * Optional metadata
-   */
-  title       String?
-  description String?
-  uploadedBy  String?
-
-  program Program @relation(fields: [programId], references: [id], onDelete: Cascade)
-
-  createdAt DateTime  @default(now())
-  deletedAt DateTime?
-
-  @@index([programId])
-}
-
-//////////////////////////////
-// FISCAL & BUDGETING
-//////////////////////////////
-
-model FiscalYear {
-  id       Int     @id @default(autoincrement())
-  year     Int     @unique
-  isActive Boolean @default(false)
-
-  budgets        Budget[]
-  systemProfile  SystemProfile?
-  skOfficials    SkOfficial[]
-  procurementRequests ProcurementRequest[]
-  
-  createdAt DateTime  @default(now())
-  deletedAt DateTime?
-}
-
-
-model Budget {
-  id           Int     @id @default(autoincrement())
-  fiscalYearId Int     @unique
-  totalAmount  Decimal @db.Decimal(15, 2)
-  administrativeAmount Decimal @db.Decimal(15, 2)
-  youthAmount Decimal @db.Decimal(15, 2)
-
-  fiscalYear  FiscalYear         @relation(fields: [fiscalYearId], references: [id])
-  allocations BudgetAllocation[]
-
-  /**
-   * ✅ ADD THIS
-   */
-  classificationLimits BudgetClassificationLimit[]
-
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
-}
-
-model BudgetClassification {
-  id          Int     @id @default(autoincrement())
-  code        String  @unique
-  name        String
-  description String?
-  allowedCategories BudgetCategory[] @default([ADMINISTRATIVE, YOUTH])
-
-  allocations BudgetAllocation[]
-
-  /**
-   * ✅ ADD THIS
-   */
-  budgetLimits BudgetClassificationLimit[]
-
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
-}
-
-model BudgetClassificationLimit {
-  id               Int     @id @default(autoincrement())
-  budgetId         Int
-  classificationId Int
-  category         BudgetCategory
-  limitAmount      Decimal @db.Decimal(15, 2)
-
-  budget         Budget               @relation(fields: [budgetId], references: [id])
-  classification BudgetClassification @relation(fields: [classificationId], references: [id])
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([budgetId, classificationId, category])
-  @@index([budgetId, category])
-}
-
-model ObjectOfExpenditure {
-  id          Int     @id @default(autoincrement())
-  code        String  @unique
-  name        String
-  description String?
-
-  allocations BudgetAllocation[]
-
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
-}
-
-model BudgetAllocation {
-  id                    Int     @id @default(autoincrement())
-  budgetId              Int
-  programId             Int
-  classificationId      Int
-  category              BudgetCategory
-  objectOfExpenditureId Int
-  allocatedAmount       Decimal @db.Decimal(15, 2)
-  usedAmount            Decimal @default(0) @db.Decimal(15, 2)
-
-  budget         Budget               @relation(fields: [budgetId], references: [id])
-  program        Program              @relation(fields: [programId], references: [id])
-  classification BudgetClassification @relation(fields: [classificationId], references: [id])
-  object         ObjectOfExpenditure  @relation(fields: [objectOfExpenditureId], references: [id])
-
-  requests ProcurementRequest[]
-
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
-
-  @@index([budgetId, category])
-}
-
-//////////////////////////////
-// PROCUREMENT
-//////////////////////////////
-
-model Vendor {
-  id      Int     @id @default(autoincrement())
-  name    String
-  address String?
-  contact String?
-
-  requests ProcurementRequest[]
-
-  createdAt DateTime  @default(now())
-  deletedAt DateTime?
-}
-
-model ProcurementRequest {
-  id          Int               @id @default(autoincrement())
-  title       String
-  description String?
- 
-  amount      Decimal           @db.Decimal(15, 2)
-  status      ProcurementStatus @default(DRAFT)
-
-    fiscalYearId Int
-  fiscalYear   FiscalYear @relation(fields: [fiscalYearId], references: [id])
-
-
-  allocationId Int
-  vendorId     Int?
-
-  allocation BudgetAllocation @relation(fields: [allocationId], references: [id])
-  vendor     Vendor?          @relation(fields: [vendorId], references: [id])
-  
-
-  approvals Approval[]
-  items     ProcurementItem[]
-  proofs    ProcurementProof[]
-
-  createdById Int
-  createdBy   User @relation(fields: [createdById], references: [id])
-
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
-}
-
-model ProcurementItem {
-  id        Int @id @default(autoincrement())
-  requestId Int
-
-  name        String
-  description String? // ✅ ADDED
- unit String?
-  quantity    Int
-  unitCost    Decimal @db.Decimal(15, 2)
-  totalPrice  Decimal @db.Decimal(15, 2) // ✅ RECOMMENDED
-
-  request ProcurementRequest @relation(fields: [requestId], references: [id])
-
-  createdAt DateTime  @default(now())
-  deletedAt DateTime?
-}
-
-model ProcurementProof {
-  id          Int     @id @default(autoincrement())
-  requestId   Int
-  type        String
-  fileUrl     String
-  description String?
-
-  uploadedById Int
-  uploadedBy   User               @relation(fields: [uploadedById], references: [id])
-  request      ProcurementRequest @relation(fields: [requestId], references: [id])
-
-  createdAt DateTime  @default(now())
-  deletedAt DateTime?
-}
-
-//////////////////////////////
-// APPROVAL WORKFLOW
-//////////////////////////////
-
-model Approval {
-  id         Int            @id @default(autoincrement())
-  requestId  Int
-  approverId Int
-  status     ApprovalStatus @default(PENDING)
-  remarks    String?
-
-  request  ProcurementRequest @relation(fields: [requestId], references: [id])
-  approver User               @relation(fields: [approverId], references: [id])
-
-  createdAt DateTime  @default(now())
-  deletedAt DateTime?
-}
-
-
-//////////////////////////////
-// SYSTEM LOGS
-//////////////////////////////
-
-model SystemLog {
-  id      Int      @id @default(autoincrement())
-  level   LogLevel
-  message String
-  context String?
-
-  userId Int?
-  user   User? @relation(fields: [userId], references: [id])
-
-  createdAt DateTime  @default(now())
-  deletedAt DateTime?
 }
