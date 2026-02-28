@@ -27,11 +27,11 @@ export const createClassification = async (req, res) => {
 };
 
 /* ======================================================
-   GET ALL CLASSIFICATIONS
+   GET ALL CLASSIFICATIONS (WITH FILTER SUPPORT)
 ====================================================== */
-export const getClassifications = async (_req, res) => {
+export const getClassifications = async (req, res) => {
   try {
-    const data = await getClassificationsService();
+    const data = await getClassificationsService(req.query);
 
     return res.status(200).json({
       success: true,
@@ -50,7 +50,9 @@ export const getClassifications = async (_req, res) => {
 ====================================================== */
 export const getClassificationById = async (req, res) => {
   try {
-    const data = await getClassificationByIdService(req.params.id);
+    const data = await getClassificationByIdService(
+      Number(req.params.id)
+    );
 
     return res.status(200).json({
       success: true,
@@ -73,7 +75,7 @@ export const getClassificationById = async (req, res) => {
 export const updateClassification = async (req, res) => {
   try {
     const data = await updateClassificationService(
-      req.params.id,
+      Number(req.params.id),
       req.body
     );
 
@@ -95,7 +97,9 @@ export const updateClassification = async (req, res) => {
 ====================================================== */
 export const deleteClassification = async (req, res) => {
   try {
-    await deleteClassificationService(req.params.id);
+    await deleteClassificationService(
+      Number(req.params.id)
+    );
 
     return res.status(200).json({
       success: true,

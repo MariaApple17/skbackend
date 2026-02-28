@@ -79,7 +79,7 @@ export const createBudgetAllocation = async (payload) => {
     budgetId,
     programId,
     classificationId,
-    category, // ✅ ADD THIS
+    category,
     objectOfExpenditureId,
     allocatedAmount,
   } = payload;
@@ -87,25 +87,39 @@ export const createBudgetAllocation = async (payload) => {
   /* ---------------- REQUIRED FIELDS ---------------- */
   if (
     !budgetId ||
-    !programId ||
     !classificationId ||
-    !category || // ✅ REQUIRED
+    !category ||
     !objectOfExpenditureId ||
     allocatedAmount === undefined
   ) {
     throw new Error('Missing required fields');
   }
 
+  // ✅ Program required ONLY for YOUTH
+  if (category === 'YOUTH' && !programId) {
+    throw new Error('Program is required for YOUTH category');
+  }
+
   assertPositiveAmount(allocatedAmount);
 
   /* ---------------- FK VALIDATION ---------------- */
   await assertExists(db.budget, { id: budgetId, deletedAt: null }, 'Budget');
-  await assertExists(db.program, { id: programId, deletedAt: null }, 'Program');
+
+  // ✅ Validate program only if YOUTH
+  if (category === 'YOUTH') {
+    await assertExists(
+      db.program,
+      { id: programId, deletedAt: null },
+      'Program'
+    );
+  }
+
   await assertExists(
     db.budgetClassification,
     { id: classificationId, deletedAt: null },
     'Budget classification'
   );
+
   await assertExists(
     db.objectOfExpenditure,
     { id: objectOfExpenditureId, deletedAt: null },
@@ -114,19 +128,19 @@ export const createBudgetAllocation = async (payload) => {
 
   /* ---------------- CLASSIFICATION LIMIT CHECK ---------------- */
   await validateClassificationLimit({
-  budgetId,
-  classificationId,
-  category,
-  allocatedAmount,
-});
+    budgetId,
+    classificationId,
+    category,
+    allocatedAmount,
+  });
 
   /* ---------------- CREATE ---------------- */
   return db.budgetAllocation.create({
     data: {
       budgetId,
-      programId,
+      programId: category === 'ADMINISTRATIVE' ? null : programId,
       classificationId,
-      category, // ✅ FIX HERE
+      category,
       objectOfExpenditureId,
       allocatedAmount,
     },
@@ -187,6 +201,10 @@ export const getAllBudgetAllocations = async (params = {}) => {
   if (Number.isFinite(objectOfExpenditureId)) {
     where.objectOfExpenditureId = objectOfExpenditureId;
   }
+
+  if (category) {
+  where.category = category;
+}
 
   if (search && search.trim()) {
     where.OR = [
@@ -316,11 +334,25 @@ export const deleteBudgetAllocation = async (id) => {
     throw new Error('Invalid allocation ID');
   }
 
-  await assertExists(
+  const allocation = await assertExists(
     db.budgetAllocation,
     { id, deletedAt: null },
     'Budget allocation'
   );
+
+  // 🚨 CHECK IF USED IN PROCUREMENT
+  const existingRequests = await db.procurementRequest.count({
+    where: {
+      allocationId: id,
+      deletedAt: null,
+    },
+  });
+
+  if (existingRequests > 0) {
+    throw new Error(
+      'Cannot delete allocation. It is already used in procurement requests.'
+    );
+  }
 
   return db.budgetAllocation.update({
     where: { id },

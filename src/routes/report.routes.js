@@ -7,6 +7,7 @@ import {
   programUtilization,
    accomplishmentReport,
 } from '../controllers/report.controller.js';
+import { financialStatusReport } from '../controllers/report.controller.js';
 
 const router = Router();
 
@@ -33,6 +34,7 @@ router.get(
   "/accomplishment",
   accomplishmentReport
 );
+router.get('/financial-status', financialStatusReport);
 
 
 export default router;

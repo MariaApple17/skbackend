@@ -166,46 +166,53 @@ async function main() {
   })
 
   /* =====================================================
-   * 8. OBJECTS OF EXPENDITURE
-   * ===================================================== */
-  const officeSupplies = await prisma.objectOfExpenditure.upsert({
-    where: { code: 'OOE-001' },
-    update: {
-      name: 'Office Supplies',
-      description: 'Expenses for office materials',
+   * /* =====================================================
+ * 8. OBJECTS OF EXPENDITURE
+ * ===================================================== */
+const officeSupplies = await prisma.objectOfExpenditure.upsert({
+  where: { code: 'OOE-001' },
+  update: {
+    name: 'Office Supplies',
+    description: 'Expenses for office materials',
+    classificationId: mooe.id,
+  },
+  create: {
+    code: 'OOE-001',
+    name: 'Office Supplies',
+    description: 'Expenses for office materials',
+    classification: {
+      connect: { id: mooe.id },
     },
-    create: {
-      code: 'OOE-001',
-      name: 'Office Supplies',
-      description: 'Expenses for office materials',
-    },
-  })
+  },
+})
 
   /* =====================================================
-   * 9. SAMPLE PROGRAM
-   * ===================================================== */
-  const youthProgram = await prisma.program.upsert({
-    where: { code: 'PRG-001' },
-    update: {
-      name: 'Youth Development Program',
-      description: 'Skills and training activities for youth',
-      committeeInCharge: 'Education Committee',
-      beneficiaries: 'Youth constituents',
-      startDate: new Date('2026-01-01'),
-      endDate: new Date('2026-12-31'),
-      isActive: true,
-    },
-    create: {
-      code: 'PRG-001',
-      name: 'Youth Development Program',
-      description: 'Skills and training activities for youth',
-      committeeInCharge: 'Education Committee',
-      beneficiaries: 'Youth constituents',
-      startDate: new Date('2026-01-01'),
-      endDate: new Date('2026-12-31'),
-      isActive: true,
-    },
-  })
+ * 9. SAMPLE PROGRAM
+ * ===================================================== */
+const youthProgram = await prisma.program.upsert({
+  where: { code: 'PRG-001' },
+  update: {
+    name: 'Youth Development Program',
+    description: 'Skills and training activities for youth',
+    committeeInCharge: 'Education Committee',
+    beneficiaries: 'Youth constituents',
+    startDate: new Date('2025-01-01'),
+    endDate: new Date('2025-12-31'),
+    isActive: true,
+    fiscalYearId: fiscalYear.id, // ✅ FIX HERE
+  },
+  create: {
+    code: 'PRG-001',
+    name: 'Youth Development Program',
+    description: 'Skills and training activities for youth',
+    committeeInCharge: 'Education Committee',
+    beneficiaries: 'Youth constituents',
+    startDate: new Date('2025-01-01'),
+    endDate: new Date('2025-12-31'),
+    isActive: true,
+    fiscalYearId: fiscalYear.id, // ✅ FIX HERE
+  },
+})
 
   /* =====================================================
    * 10. CLASSIFICATION LIMITS BY CATEGORY

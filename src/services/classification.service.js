@@ -4,9 +4,8 @@ import { db } from '../config/db.config.js';
    CREATE CLASSIFICATION (WITHOUT BUDGET LIMIT)
 ====================================================== */
 export const createClassificationService = async (data) => {
-  const { code, name, description } = data;
+  const { code, name, description, allowedCategories } = data;
 
-  /* ================= BASIC VALIDATION ================= */
   if (
     typeof code !== 'string' ||
     typeof name !== 'string' ||
@@ -24,7 +23,6 @@ export const createClassificationService = async (data) => {
     throw new Error('Invalid description');
   }
 
-  /* ================= DUPLICATE CHECK ================= */
   const exists = await db.budgetClassification.findFirst({
     where: {
       OR: [
@@ -39,24 +37,34 @@ export const createClassificationService = async (data) => {
     throw new Error('Classification code or name already exists');
   }
 
-  /* ================= CREATE CLASSIFICATION ================= */
   return db.budgetClassification.create({
     data: {
       code: code.trim(),
       name: name.trim(),
       description: description?.trim() || null,
+      allowedCategories: allowedCategories ?? [],
     },
   });
 };
 
 /* ======================================================
-   GET ALL CLASSIFICATIONS (WITH LIMITS)
+   GET ALL CLASSIFICATIONS (WITH FILTER + LIMITS)
 ====================================================== */
-export const getClassificationsService = async () => {
+export const getClassificationsService = async (query = {}) => {
+  const { category } = query;
+
   return db.budgetClassification.findMany({
-    where: { deletedAt: null },
+    where: {
+      deletedAt: null,
+      ...(category && {
+        allowedCategories: {
+          has: category,
+        },
+      }),
+    },
     orderBy: { createdAt: 'desc' },
     include: {
+      objects: true, // 🔥 Added (safe relation)
       budgetLimits: {
         include: {
           budget: {
@@ -72,7 +80,7 @@ export const getClassificationsService = async () => {
 };
 
 /* ======================================================
-   GET CLASSIFICATION BY ID (WITH LIMIT)
+   GET CLASSIFICATION BY ID (WITH LIMIT + OBJECTS)
 ====================================================== */
 export const getClassificationByIdService = async (id) => {
   if (!Number.isInteger(Number(id))) {
@@ -82,6 +90,7 @@ export const getClassificationByIdService = async (id) => {
   const classification = await db.budgetClassification.findFirst({
     where: { id: Number(id), deletedAt: null },
     include: {
+      objects: true, // 🔥 Added
       budgetLimits: {
         include: {
           budget: {
@@ -103,7 +112,7 @@ export const getClassificationByIdService = async (id) => {
 };
 
 /* ======================================================
-   UPDATE CLASSIFICATION (WITHOUT BUDGET LIMIT)
+   UPDATE CLASSIFICATION
 ====================================================== */
 export const updateClassificationService = async (id, data) => {
   if (!Number.isInteger(Number(id))) {
@@ -125,14 +134,12 @@ export const updateClassificationService = async (id, data) => {
     throw new Error('Classification not found');
   }
 
-  /* ================= CODE CHANGE RULE ================= */
   if (data.code && classification.budgetLimits.length > 0) {
     throw new Error(
       'Cannot change classification code while it is used in budget limits'
     );
   }
 
-  /* ================= DUPLICATE CHECK ================= */
   if (data.code || data.name) {
     const duplicate = await db.budgetClassification.findFirst({
       where: {
@@ -150,7 +157,6 @@ export const updateClassificationService = async (id, data) => {
     }
   }
 
-  /* ================= UPDATE CLASSIFICATION ================= */
   return db.budgetClassification.update({
     where: { id: Number(id) },
     data: {
@@ -158,6 +164,9 @@ export const updateClassificationService = async (id, data) => {
       ...(data.name && { name: data.name.trim() }),
       ...(data.description !== undefined && {
         description: data.description?.trim() || null,
+      }),
+      ...(data.allowedCategories && {
+        allowedCategories: data.allowedCategories,
       }),
     },
   });
@@ -176,6 +185,7 @@ export const deleteClassificationService = async (id) => {
     include: {
       allocations: true,
       budgetLimits: true,
+      objects: true, // 🔥 Prevent delete if objects exist
     },
   });
 
@@ -192,6 +202,12 @@ export const deleteClassificationService = async (id) => {
   if (classification.budgetLimits.length > 0) {
     throw new Error(
       'Cannot delete classification with existing budget limits'
+    );
+  }
+
+  if (classification.objects.length > 0) {
+    throw new Error(
+      'Cannot delete classification with existing objects of expenditure'
     );
   }
 

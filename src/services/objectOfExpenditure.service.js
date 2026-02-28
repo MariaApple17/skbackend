@@ -1,7 +1,12 @@
 import { db } from '../config/db.config.js';
 
+/* ================= CREATE ================= */
 export const createObjectOfExpenditureService = async (data) => {
-  const { code, name, description } = data;
+  const { code, name, description, classificationId } = data;
+
+  if (!code || !name || !classificationId) {
+    throw new Error('Code, name and classification are required');
+  }
 
   const exists = await db.objectOfExpenditure.findFirst({
     where: {
@@ -15,10 +20,16 @@ export const createObjectOfExpenditureService = async (data) => {
   }
 
   return db.objectOfExpenditure.create({
-    data: { code, name, description },
+    data: {
+      code: code.trim(),
+      name: name.trim(),
+      description: description?.trim() || null,
+      classificationId: Number(classificationId), // ✅ REQUIRED
+    },
   });
 };
 
+/* ================= READ (LIST) ================= */
 export const getObjectsOfExpenditureService = async (query) => {
   const {
     q,
@@ -46,6 +57,9 @@ export const getObjectsOfExpenditureService = async (query) => {
       skip: +skip,
       take: +limit,
       orderBy: { [sortBy]: order },
+      include: {
+        classification: true, // ✅ So UI can show classification name
+      },
     }),
     db.objectOfExpenditure.count({ where }),
   ]);
@@ -61,9 +75,13 @@ export const getObjectsOfExpenditureService = async (query) => {
   };
 };
 
+/* ================= READ (SINGLE) ================= */
 export const getObjectOfExpenditureByIdService = async (id) => {
   const data = await db.objectOfExpenditure.findFirst({
     where: { id, deletedAt: null },
+    include: {
+      classification: true, // ✅ Include relation
+    },
   });
 
   if (!data) {
@@ -73,6 +91,7 @@ export const getObjectOfExpenditureByIdService = async (id) => {
   return data;
 };
 
+/* ================= UPDATE ================= */
 export const updateObjectOfExpenditureService = async (id, data) => {
   const existing = await db.objectOfExpenditure.findFirst({
     where: { id, deletedAt: null },
@@ -87,9 +106,9 @@ export const updateObjectOfExpenditureService = async (id, data) => {
       where: {
         id: { not: id },
         OR: [
-          { code: data.code },
-          { name: data.name },
-        ],
+          data.code ? { code: data.code } : undefined,
+          data.name ? { name: data.name } : undefined,
+        ].filter(Boolean),
         deletedAt: null,
       },
     });
@@ -101,10 +120,20 @@ export const updateObjectOfExpenditureService = async (id, data) => {
 
   return db.objectOfExpenditure.update({
     where: { id },
-    data,
+    data: {
+      ...(data.code && { code: data.code.trim() }),
+      ...(data.name && { name: data.name.trim() }),
+      ...(data.description !== undefined && {
+        description: data.description?.trim() || null,
+      }),
+      ...(data.classificationId && {
+        classificationId: Number(data.classificationId),
+      }),
+    },
   });
 };
 
+/* ================= DELETE ================= */
 export const deleteObjectOfExpenditureService = async (id) => {
   return db.objectOfExpenditure.update({
     where: { id },

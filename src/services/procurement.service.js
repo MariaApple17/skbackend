@@ -223,9 +223,23 @@ export const approveRequest = async (requestId, approverId, remarks) => {
       );
     }
 
-    const remaining =
-      request.allocation.allocatedAmount -
-      request.allocation.usedAmount;
+   // 🔥 Compute real used dynamically
+const completedRequests = await tx.procurementRequest.findMany({
+  where: {
+    allocationId: request.allocationId,
+    status: 'COMPLETED',
+    deletedAt: null,
+  },
+  select: { amount: true },
+});
+
+const totalUsed = completedRequests.reduce(
+  (sum, r) => sum + Number(r.amount),
+  0
+);
+
+const remaining =
+  Number(request.allocation.allocatedAmount) - totalUsed;
 
     if (request.amount > remaining) {
       throw new AppError(
@@ -351,13 +365,12 @@ export const completeRequest = async requestId => {
         { currentStatus: request.status }
       );
     }
-
-    await tx.budgetAllocation.update({
-      where: { id: request.allocationId },
-      data: {
-        usedAmount: { increment: request.amount },
-      },
-    });
+await tx.budgetAllocation.update({
+  where: { id: request.allocationId },
+  data: {
+    usedAmount: { increment: Number(request.amount) },
+  },
+});
 
     return tx.procurementRequest.update({
       where: { id: requestId },

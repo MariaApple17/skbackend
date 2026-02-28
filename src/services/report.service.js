@@ -273,40 +273,40 @@ export async function getAccomplishmentReport({
   if (!activeFY) {
     return { data: [], total: 0, page, limit };
   }
-
-  const programs = await prisma.program.findMany({
-    where: {
-      deletedAt: null,
-      ...(search && {
-        name: {
-          contains: search,
-          mode: 'insensitive',
+const programs = await prisma.program.findMany({
+  where: {
+    deletedAt: null,
+    fiscalYearId: activeFY.id, // 🔥 FIX
+    ...(search && {
+      name: {
+        contains: search,
+        mode: 'insensitive',
+      },
+    }),
+  },
+  include: {
+    allocations: {
+      where: {
+        budget: {
+          fiscalYearId: activeFY.id,
         },
-      }),
-    },
-    include: {
-      allocations: {
-        where: {
-          budget: {
-            fiscalYearId: activeFY.id,
+      },
+      include: {
+        requests: {
+          where: {
+            deletedAt: null,
+            status: {
+              in: ['APPROVED', 'PURCHASED', 'COMPLETED'],
+            },
           },
-        },
-        include: {
-          requests: {
-            where: {
-              deletedAt: null,
-              status: {
-                in: ['APPROVED', 'PURCHASED', 'COMPLETED'],
-              },
-            },
-            select: {
-              amount: true,
-            },
+          select: {
+            amount: true,
           },
         },
       },
     },
-  });
+  },
+});
 
   const computed = programs.map(program => {
     const totalAllocated = program.allocations.reduce(
@@ -350,4 +350,86 @@ export async function getAccomplishmentReport({
     page,
     limit,
   };
+}
+/* ===============================
+   FINANCIAL STATUS REPORT
+   Based on Budget Allocations
+   Active Fiscal Year ONLY
+================================ */
+export async function getFinancialStatusReport() {
+  const activeFY = await getActiveFiscalYear();
+
+  if (!activeFY) {
+    return [];
+  }
+
+  const allocations = await prisma.budgetAllocation.findMany({
+    where: {
+      deletedAt: null,
+      budget: {
+        fiscalYearId: activeFY.id,
+      },
+    },
+    include: {
+      classification: true,
+      object: true,
+
+      // ✅ PROCUREMENT (Approved only)
+      requests: {
+        where: {
+          deletedAt: null,
+          status: {
+            in: ['APPROVED', 'PURCHASED', 'COMPLETED'],
+          },
+        },
+        select: {
+          amount: true,
+        },
+      },
+
+      // ✅ PLANTILLA (Personal Services)
+      plantillas: {
+        select: {
+          amount: true,
+        },
+      },
+    },
+  });
+
+  return allocations.map((allocation) => {
+    const appropriation = Number(allocation.allocatedAmount || 0);
+
+    // 🔥 PROCUREMENT TOTAL
+    const procurementTotal = allocation.requests.reduce(
+      (sum, req) => sum + Number(req.amount || 0),
+      0
+    );
+
+    // 🔥 PLANTILLA TOTAL
+    const plantillaTotal = allocation.plantillas.reduce(
+      (sum, p) => sum + Number(p.amount || 0),
+      0
+    );
+
+    // ✅ COMBINED OBLIGATIONS
+    const obligations = procurementTotal + plantillaTotal;
+
+    const balance = appropriation - obligations;
+
+    let remarks = 'No Obligation';
+    if (obligations > 0 && obligations < appropriation)
+      remarks = 'Partially Utilized';
+    if (obligations >= appropriation)
+      remarks = 'Fully Utilized';
+
+    return {
+      classification: allocation.classification?.name || 'Unknown',
+      object: allocation.object?.name || '',
+      appropriation,
+      allotment: appropriation,
+      obligations,
+      balance,
+      remarks,
+    };
+  });
 }

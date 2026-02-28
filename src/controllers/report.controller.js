@@ -4,15 +4,11 @@ import {
   getProcurementReport,
   getProgramUtilization,
   getAccomplishmentReport,
+  getFinancialStatusReport, // ✅ ADD THIS
 } from '../services/report.service.js';
 
 /* ===============================
    BUDGET SUMMARY
-   Query:
-   - fiscalYearId
-   - search
-   - page
-   - limit
 ================================ */
 export async function budgetSummary(req, res) {
   const result = await getBudgetSummary({
@@ -35,13 +31,6 @@ export async function budgetSummary(req, res) {
 
 /* ===============================
    PROCUREMENT REPORT
-   Query:
-   - status
-   - from
-   - to
-   - search
-   - page
-   - limit
 ================================ */
 export async function procurementReport(req, res) {
   const result = await getProcurementReport({
@@ -66,11 +55,6 @@ export async function procurementReport(req, res) {
 
 /* ===============================
    APPROVAL REPORT
-   Query:
-   - requestId
-   - search
-   - page
-   - limit
 ================================ */
 export async function approvalReport(req, res) {
   const result = await getApprovalReport({
@@ -93,10 +77,6 @@ export async function approvalReport(req, res) {
 
 /* ===============================
    PROGRAM UTILIZATION
-   Query:
-   - search
-   - page
-   - limit
 ================================ */
 export async function programUtilization(req, res) {
   const result = await getProgramUtilization({
@@ -115,6 +95,7 @@ export async function programUtilization(req, res) {
     },
   });
 }
+
 /* ===============================
    ACCOMPLISHMENT REPORT
 ================================ */
@@ -134,4 +115,28 @@ export async function accomplishmentReport(req, res) {
       limit: result.limit,
     },
   });
+}
+
+/* ===============================
+   ✅ FINANCIAL STATUS REPORT
+   Obligations from:
+   - Procurement (MOOE)
+   - Plantilla (Personal Services)
+================================ */
+export async function financialStatusReport(req, res) {
+  try {
+    const result = await getFinancialStatusReport();
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    console.error('Financial Status Report Error:', error);
+
+    res.status(500).json({
+      success: false,
+      message: 'Failed to load financial status report',
+    });
+  }
 }

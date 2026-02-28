@@ -117,6 +117,7 @@ CREATE TABLE "Program" (
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
     "deletedAt" TIMESTAMP(3),
+    "fiscalYearId" INTEGER,
 
     CONSTRAINT "Program_pkey" PRIMARY KEY ("id")
 );
@@ -193,6 +194,7 @@ CREATE TABLE "ObjectOfExpenditure" (
     "code" TEXT NOT NULL,
     "name" TEXT NOT NULL,
     "description" TEXT,
+    "classificationId" INTEGER NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
     "deletedAt" TIMESTAMP(3),
@@ -204,10 +206,10 @@ CREATE TABLE "ObjectOfExpenditure" (
 CREATE TABLE "BudgetAllocation" (
     "id" SERIAL NOT NULL,
     "budgetId" INTEGER NOT NULL,
-    "programId" INTEGER NOT NULL,
-    "classificationId" INTEGER NOT NULL,
+    "programId" INTEGER,
     "category" "BudgetCategory" NOT NULL,
     "objectOfExpenditureId" INTEGER NOT NULL,
+    "classificationId" INTEGER NOT NULL,
     "allocatedAmount" DECIMAL(15,2) NOT NULL,
     "usedAmount" DECIMAL(15,2) NOT NULL DEFAULT 0,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -291,6 +293,20 @@ CREATE TABLE "Approval" (
 );
 
 -- CreateTable
+CREATE TABLE "Plantilla" (
+    "id" SERIAL NOT NULL,
+    "officialId" INTEGER NOT NULL,
+    "budgetAllocationId" INTEGER NOT NULL,
+    "amount" DOUBLE PRECISION NOT NULL,
+    "periodCovered" TEXT NOT NULL,
+    "remarks" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Plantilla_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "SystemLog" (
     "id" SERIAL NOT NULL,
     "level" "LogLevel" NOT NULL,
@@ -352,10 +368,13 @@ ALTER TABLE "SkOfficial" ADD CONSTRAINT "SkOfficial_fiscalYearId_fkey" FOREIGN K
 ALTER TABLE "User" ADD CONSTRAINT "User_roleId_fkey" FOREIGN KEY ("roleId") REFERENCES "Role"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "RolePermission" ADD CONSTRAINT "RolePermission_permissionId_fkey" FOREIGN KEY ("permissionId") REFERENCES "Permission"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "RolePermission" ADD CONSTRAINT "RolePermission_roleId_fkey" FOREIGN KEY ("roleId") REFERENCES "Role"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "RolePermission" ADD CONSTRAINT "RolePermission_permissionId_fkey" FOREIGN KEY ("permissionId") REFERENCES "Permission"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "Program" ADD CONSTRAINT "Program_fiscalYearId_fkey" FOREIGN KEY ("fiscalYearId") REFERENCES "FiscalYear"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "ProgramDocumentImage" ADD CONSTRAINT "ProgramDocumentImage_programId_fkey" FOREIGN KEY ("programId") REFERENCES "Program"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -370,10 +389,10 @@ ALTER TABLE "BudgetClassificationLimit" ADD CONSTRAINT "BudgetClassificationLimi
 ALTER TABLE "BudgetClassificationLimit" ADD CONSTRAINT "BudgetClassificationLimit_classificationId_fkey" FOREIGN KEY ("classificationId") REFERENCES "BudgetClassification"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "BudgetAllocation" ADD CONSTRAINT "BudgetAllocation_budgetId_fkey" FOREIGN KEY ("budgetId") REFERENCES "Budget"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "ObjectOfExpenditure" ADD CONSTRAINT "ObjectOfExpenditure_classificationId_fkey" FOREIGN KEY ("classificationId") REFERENCES "BudgetClassification"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "BudgetAllocation" ADD CONSTRAINT "BudgetAllocation_programId_fkey" FOREIGN KEY ("programId") REFERENCES "Program"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "BudgetAllocation" ADD CONSTRAINT "BudgetAllocation_budgetId_fkey" FOREIGN KEY ("budgetId") REFERENCES "Budget"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "BudgetAllocation" ADD CONSTRAINT "BudgetAllocation_classificationId_fkey" FOREIGN KEY ("classificationId") REFERENCES "BudgetClassification"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -382,31 +401,40 @@ ALTER TABLE "BudgetAllocation" ADD CONSTRAINT "BudgetAllocation_classificationId
 ALTER TABLE "BudgetAllocation" ADD CONSTRAINT "BudgetAllocation_objectOfExpenditureId_fkey" FOREIGN KEY ("objectOfExpenditureId") REFERENCES "ObjectOfExpenditure"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "ProcurementRequest" ADD CONSTRAINT "ProcurementRequest_fiscalYearId_fkey" FOREIGN KEY ("fiscalYearId") REFERENCES "FiscalYear"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "BudgetAllocation" ADD CONSTRAINT "BudgetAllocation_programId_fkey" FOREIGN KEY ("programId") REFERENCES "Program"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "ProcurementRequest" ADD CONSTRAINT "ProcurementRequest_allocationId_fkey" FOREIGN KEY ("allocationId") REFERENCES "BudgetAllocation"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "ProcurementRequest" ADD CONSTRAINT "ProcurementRequest_vendorId_fkey" FOREIGN KEY ("vendorId") REFERENCES "Vendor"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "ProcurementRequest" ADD CONSTRAINT "ProcurementRequest_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "ProcurementRequest" ADD CONSTRAINT "ProcurementRequest_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "ProcurementRequest" ADD CONSTRAINT "ProcurementRequest_fiscalYearId_fkey" FOREIGN KEY ("fiscalYearId") REFERENCES "FiscalYear"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ProcurementRequest" ADD CONSTRAINT "ProcurementRequest_vendorId_fkey" FOREIGN KEY ("vendorId") REFERENCES "Vendor"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "ProcurementItem" ADD CONSTRAINT "ProcurementItem_requestId_fkey" FOREIGN KEY ("requestId") REFERENCES "ProcurementRequest"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "ProcurementProof" ADD CONSTRAINT "ProcurementProof_requestId_fkey" FOREIGN KEY ("requestId") REFERENCES "ProcurementRequest"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "ProcurementProof" ADD CONSTRAINT "ProcurementProof_uploadedById_fkey" FOREIGN KEY ("uploadedById") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "ProcurementProof" ADD CONSTRAINT "ProcurementProof_requestId_fkey" FOREIGN KEY ("requestId") REFERENCES "ProcurementRequest"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "Approval" ADD CONSTRAINT "Approval_approverId_fkey" FOREIGN KEY ("approverId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Approval" ADD CONSTRAINT "Approval_requestId_fkey" FOREIGN KEY ("requestId") REFERENCES "ProcurementRequest"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Approval" ADD CONSTRAINT "Approval_approverId_fkey" FOREIGN KEY ("approverId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "Plantilla" ADD CONSTRAINT "Plantilla_officialId_fkey" FOREIGN KEY ("officialId") REFERENCES "SkOfficial"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Plantilla" ADD CONSTRAINT "Plantilla_budgetAllocationId_fkey" FOREIGN KEY ("budgetAllocationId") REFERENCES "BudgetAllocation"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "SystemLog" ADD CONSTRAINT "SystemLog_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;

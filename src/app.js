@@ -20,6 +20,7 @@ import skOfficialRoutes from './routes/skOfficial.route.js';
 import systemProfileRoutes from './routes/systemProfile.route.js';
 import transparencyRoutes from './routes/transparency.route.js';
 import userRoutes from './routes/user.route.js';
+import skPlantillaRoutes from './routes/sk-plantilla.route.js';
 
 const app = express();
 
@@ -44,6 +45,7 @@ app.use("/api/programs", programRoutes);
 app.use("/api/classifications", classificationRoutes);
 app.use("/api/classification-limits", classificationLimitRoutes);
 app.use("/api/objects-of-expenditure",objectOfExpenditureRoutes);
+app.use("/api/sk-plantilla", skPlantillaRoutes);
 
 /* ================= PROCUREMENT ================= */
 app.use("/api/procurement", procurementRoutes);
