@@ -23,17 +23,31 @@ import userRoutes from './routes/user.route.js';
 import skPlantillaRoutes from './routes/sk-plantilla.route.js';
 
 const app = express();
-
 /* ================= MIDDLEWARES ================= */
+
+const allowedOrigins = [
+  "http://localhost:3000",
+  "https://skfrontend-omega.vercel.app"
+];
+
 app.use(cors({
-  origin: [
-    "http://localhost:3000",
-    "https://skfrontend-omega.vercel.app"
-  ],
+  origin: function (origin, callback) {
+    if (!origin) return callback(null, true);
+
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    } else {
+      return callback(new Error("Not allowed by CORS"));
+    }
+  },
   credentials: true,
-  methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
+  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"]
 }));
+
+// 🔥 VERY IMPORTANT: handle preflight
+app.options("*", cors());
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan("dev"));
