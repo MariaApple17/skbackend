@@ -40,5 +40,10 @@ const startServer = async () => {
     process.exit(1);
   }
 };
+app.get('/', (req, res) => {
+  res.status(200).json({
+    message: "SK360 Backend API is running 🚀"
+  });
+});
 
 startServer();
