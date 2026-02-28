@@ -24,29 +24,21 @@ import skPlantillaRoutes from './routes/sk-plantilla.route.js';
 
 const app = express();
 /* ================= MIDDLEWARES ================= */
-
 const allowedOrigins = [
   "http://localhost:3000",
   "https://skfrontend-omega.vercel.app"
 ];
 
-app.use(cors({
-  origin: function (origin, callback) {
-    if (!origin) return callback(null, true);
+const corsOptions = {
+  origin: allowedOrigins,
+  credentials: true
+};
 
-    if (allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    } else {
-      return callback(new Error("Not allowed by CORS"));
-    }
-  },
-  credentials: true,
-  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"]
-}));
+// 🔥 Apply CORS globally
+app.use(cors(corsOptions));
 
-// 🔥 VERY IMPORTANT: handle preflight
-app.options("*", cors());
+// 🔥 Properly handle ALL preflight requests
+app.options("*", cors(corsOptions));
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
