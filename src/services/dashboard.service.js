@@ -4,18 +4,18 @@ const CATEGORY_KEYS = ['ADMINISTRATIVE', 'YOUTH'];
 
 const getCategoryBudgetCap = (budget, category) =>
   category === 'ADMINISTRATIVE'
-    ? Number(budget.administrativeAmount)
-    : Number(budget.youthAmount);
+    ? Number(budget.administrativeAmount || 0)
+    : Number(budget.youthAmount || 0);
 
 const buildCategoryBreakdown = (budget, allocations) => {
   return CATEGORY_KEYS.map((category) => {
     const allocated = allocations
       .filter((a) => a.category === category)
-      .reduce((sum, a) => sum + Number(a.allocatedAmount), 0);
+      .reduce((sum, a) => sum + Number(a.allocatedAmount || 0), 0);
 
     const used = allocations
       .filter((a) => a.category === category)
-      .reduce((sum, a) => sum + Number(a.usedAmount), 0);
+      .reduce((sum, a) => sum + Number(a.usedAmount || 0), 0);
 
     const cap = getCategoryBudgetCap(budget, category);
     const remaining = cap - used;
@@ -26,7 +26,8 @@ const buildCategoryBreakdown = (budget, allocations) => {
       allocated,
       used,
       remaining,
-      utilizationRate: cap > 0 ? ((used / cap) * 100).toFixed(2) : '0.00',
+      utilizationRate:
+        cap > 0 ? ((used / cap) * 100).toFixed(2) : '0.00',
     };
   });
 };
@@ -46,112 +47,72 @@ export const getDashboardData = async ({
      ALL YEARS DASHBOARD
   ============================================================ */
   if (mode === 'ALL') {
-  const fiscalYears = await db.fiscalYear.findMany({
-    where: { deletedAt: null },
-    orderBy: { year: 'asc' },
-    include: {
-      budgets: {
-        include: {
-          allocations: {
-            where: { deletedAt: null },
+    const fiscalYears = await db.fiscalYear.findMany({
+      where: { deletedAt: null },
+      orderBy: { year: 'asc' },
+      include: {
+        budgets: {
+          include: {
+            allocations: {
+              where: { deletedAt: null },
+            },
           },
         },
       },
-    },
-  });
+    });
 
-  if (!fiscalYears.length) {
-    throw new Error('No fiscal years found');
-  }
-
-  const yearlyStats = fiscalYears.map((fy) => {
-    const budget = fy.budgets; // ✅ FIXED (no [0])
-
-    if (!budget) {
-      return {
-        fiscalYear: fy.year,
-        total: 0,
-        administrativeAmount: 0,
-        youthAmount: 0,
-        allocated: 0,
-        used: 0,
-        remaining: 0,
-        utilizationRate: '0.00',
-      };
+    if (!fiscalYears.length) {
+      throw new Error('No fiscal years found');
     }
 
-    const totalAmount = Number(budget.totalAmount || 0);
-    const administrativeAmount = Number(budget.administrativeAmount || 0);
-    const youthAmount = Number(budget.youthAmount || 0);
+    const yearlyStats = fiscalYears.map((fy) => {
+      const budget = fy.budgets;
 
-    const allocated = budget.allocations.reduce(
-      (sum, a) => sum + Number(a.allocatedAmount || 0),
-      0
-    );
+      if (!budget) {
+        return {
+          fiscalYear: fy.year,
+          total: 0,
+          administrativeAmount: 0,
+          youthAmount: 0,
+          allocated: 0,
+          used: 0,
+          remaining: 0,
+          utilizationRate: '0.00',
+        };
+      }
 
-    const used = budget.allocations.reduce(
-      (sum, a) => sum + Number(a.usedAmount || 0),
-      0
-    );
-
-    const remaining = totalAmount - used;
-
-    return {
-      fiscalYear: fy.year,
-      total: totalAmount,
-      administrativeAmount,
-      youthAmount,
-      allocated,
-      used,
-      remaining,
-      utilizationRate:
-        totalAmount > 0
-          ? ((used / totalAmount) * 100).toFixed(2)
-          : '0.00',
-    };
-  });
-
-  const totals = yearlyStats.reduce(
-    (acc, y) => {
-      acc.total += y.total;
-      acc.allocated += y.allocated;
-      acc.used += y.used;
-      acc.remaining += y.remaining;
-      return acc;
-    },
-    { total: 0, allocated: 0, used: 0, remaining: 0 }
-  );
-
-  return {
-    mode: 'ALL',
-    totals,
-    yearly: yearlyStats,
-  };
-}
+      const totalAmount = Number(budget.totalAmount || 0);
+      const administrativeAmount = Number(
+        budget.administrativeAmount || 0
+      );
+      const youthAmount = Number(budget.youthAmount || 0);
 
       const allocated = budget.allocations.reduce(
-        (s, a) => s + Number(a.allocatedAmount),
+        (sum, a) => sum + Number(a.allocatedAmount || 0),
         0
       );
 
       const used = budget.allocations.reduce(
-        (s, a) => s + Number(a.usedAmount),
+        (sum, a) => sum + Number(a.usedAmount || 0),
         0
       );
 
+      const remaining = totalAmount - used;
+
       return {
         fiscalYear: fy.year,
-        total: Number(budget.totalAmount),
-        administrativeAmount: Number(budget.administrativeAmount),
-        youthAmount: Number(budget.youthAmount),
+        total: totalAmount,
+        administrativeAmount,
+        youthAmount,
         allocated,
         used,
-        remaining: Number(budget.totalAmount) - used,
-        utilizationRate: budget.totalAmount > 0
-          ? ((used / Number(budget.totalAmount)) * 100).toFixed(2)
-          : '0.00',
+        remaining,
+        utilizationRate:
+          totalAmount > 0
+            ? ((used / totalAmount) * 100).toFixed(2)
+            : '0.00',
       };
-    };
+    });
 
     const totals = yearlyStats.reduce(
       (acc, y) => {
@@ -169,7 +130,7 @@ export const getDashboardData = async ({
       totals,
       yearly: yearlyStats,
     };
-  
+  }
 
   /* ============================================================
      SINGLE YEAR DASHBOARD
@@ -212,19 +173,21 @@ export const getDashboardData = async ({
     throw new Error('No budget found for this fiscal year');
   }
 
-  /* ================= BUDGET TOTALS ================= */
   const allocated = budget.allocations.reduce(
-    (sum, a) => sum + Number(a.allocatedAmount),
+    (sum, a) => sum + Number(a.allocatedAmount || 0),
     0
   );
 
   const used = budget.allocations.reduce(
-    (sum, a) => sum + Number(a.usedAmount),
+    (sum, a) => sum + Number(a.usedAmount || 0),
     0
   );
 
   const remaining = Number(budget.totalAmount) - used;
-  const byCategory = buildCategoryBreakdown(budget, budget.allocations);
+  const byCategory = buildCategoryBreakdown(
+    budget,
+    budget.allocations
+  );
 
   /* ================= PROCUREMENT ================= */
   const procurement = await db.procurementRequest.groupBy({
@@ -255,7 +218,9 @@ export const getDashboardData = async ({
 
   /* ================= USERS ================= */
   const users = {
-    total: await db.user.count({ where: { deletedAt: null } }),
+    total: await db.user.count({
+      where: { deletedAt: null },
+    }),
     byStatus: await db.user.groupBy({
       by: ['status'],
       where: { deletedAt: null },
@@ -275,7 +240,9 @@ export const getDashboardData = async ({
       orderBy: { createdAt: 'desc' },
       take: 10,
       include: {
-        user: { select: { id: true, fullName: true } },
+        user: {
+          select: { id: true, fullName: true },
+        },
       },
     }),
     summary: await db.systemLog.groupBy({
@@ -293,15 +260,20 @@ export const getDashboardData = async ({
     },
     budget: {
       total: Number(budget.totalAmount),
-      administrativeAmount: Number(budget.administrativeAmount),
+      administrativeAmount: Number(
+        budget.administrativeAmount
+      ),
       youthAmount: Number(budget.youthAmount),
       allocated,
       used,
       remaining,
-      utilizationRate: (
-        (used / Number(budget.totalAmount)) *
-        100
-      ).toFixed(2),
+      utilizationRate:
+        Number(budget.totalAmount) > 0
+          ? (
+              (used / Number(budget.totalAmount)) *
+              100
+            ).toFixed(2)
+          : '0.00',
       byCategory,
     },
     procurement,
@@ -309,4 +281,4 @@ export const getDashboardData = async ({
     users,
     logs,
   };
-
+};
