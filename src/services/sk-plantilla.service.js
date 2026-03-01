@@ -160,6 +160,7 @@ const plantilla = await tx.plantilla.create({
   if (!activeYear) {
     throw new Error("No active fiscal year found");
   }
+  
 
   // 2️⃣ Only get plantilla for that year
   return prisma.plantilla.findMany({
@@ -172,6 +173,7 @@ const plantilla = await tx.plantilla.create({
         include: {
           classification: true,
           object: true,
+           fiscalYearId: activeYear.id, 
         },
       },
     },
