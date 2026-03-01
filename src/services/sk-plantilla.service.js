@@ -149,7 +149,6 @@ const plantilla = await tx.plantilla.create({
 
   async getAllPlantilla() {
 
-  // 1️⃣ Get active fiscal year
   const activeYear = await prisma.fiscalYear.findFirst({
     where: {
       isActive: true,
@@ -160,12 +159,10 @@ const plantilla = await tx.plantilla.create({
   if (!activeYear) {
     throw new Error("No active fiscal year found");
   }
-  
 
-  // 2️⃣ Only get plantilla for that year
   return prisma.plantilla.findMany({
     where: {
-      fiscalYearId: activeYear.id,
+      fiscalYearId: activeYear.id,   // ✅ FILTER HERE ONLY
     },
     include: {
       official: true,
@@ -173,7 +170,6 @@ const plantilla = await tx.plantilla.create({
         include: {
           classification: true,
           object: true,
-           fiscalYearId: activeYear.id, 
         },
       },
     },
