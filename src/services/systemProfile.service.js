@@ -3,7 +3,9 @@ import { db } from '../config/db.config.js';
 const isNonEmptyString = (val) =>
   typeof val === 'string' && val.trim().length > 0;
 
-/* ================= GET ================= */
+/* ======================================================
+   GET SYSTEM PROFILE (GLOBAL)
+====================================================== */
 export const getSystemProfile = async () => {
   let profile = await db.systemProfile.findFirst();
 
@@ -11,8 +13,9 @@ export const getSystemProfile = async () => {
   if (!profile) {
     profile = await db.systemProfile.create({
       data: {
-        systemName: 'SK Budget Management System',
-        systemDescription: 'Default system profile',
+        systemName: 'SK360',
+        systemDescription:
+          'Project, Budget, and Report Monitoring System',
         location: '',
         logoUrl: '',
       },
@@ -22,7 +25,9 @@ export const getSystemProfile = async () => {
   return profile;
 };
 
-/* ================= UPDATE ================= */
+/* ======================================================
+   UPDATE SYSTEM PROFILE (GLOBAL)
+====================================================== */
 export const updateSystemProfile = async (payload) => {
   const profile = await db.systemProfile.findFirst();
 
@@ -32,6 +37,8 @@ export const updateSystemProfile = async (payload) => {
       message: 'System profile not found',
     };
   }
+
+  /* ================= VALIDATION ================= */
 
   if (
     payload.systemName !== undefined &&
