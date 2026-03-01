@@ -182,6 +182,22 @@ export const getAllBudgetAllocations = async (params = {}) => {
 
   /* ================= WHERE ================= */
   const where = { deletedAt: null };
+  // 🔥 Force active fiscal year
+const activeYear = await db.fiscalYear.findFirst({
+  where: {
+    isActive: true,
+    deletedAt: null,
+  },
+});
+
+if (!activeYear) {
+  throw new Error("No active fiscal year found");
+}
+
+where.budget = {
+  fiscalYearId: activeYear.id,
+};
+
   if (fiscalYearId) {
   where.budget = {
     fiscalYearId: Number(fiscalYearId),
@@ -233,6 +249,7 @@ export const getAllBudgetAllocations = async (params = {}) => {
     }),
     db.budgetAllocation.count({ where }),
   ]);
+  
 
   /* ================= RESPONSE ================= */
   return {
