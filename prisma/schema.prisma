@@ -132,6 +132,7 @@ model FiscalYear {
   programs            Program[]
   skOfficials         SkOfficial[]
   SystemProfile       SystemProfile?
+  plantillas Plantilla[]
 }
 
 model Budget {
@@ -294,6 +295,8 @@ model Plantilla {
   updatedAt          DateTime         @updatedAt
   budgetAllocation   BudgetAllocation @relation(fields: [budgetAllocationId], references: [id])
   official           SkOfficial       @relation(fields: [officialId], references: [id])
+  fiscalYearId      Int?
+  fiscalYear        FiscalYear?            @relation(fields: [fiscalYearId], references: [id])
 }
 
 model SystemLog {
