@@ -7,11 +7,7 @@ const SYSTEM_PROFILE_FOLDER =
 /* ================= GET ================= */
 export const get = async (req, res) => {
   try {
-    const { fiscalYearId } = req.query;
-
-    const data = await systemProfileService.getSystemProfile(
-      fiscalYearId
-    );
+    const data = await systemProfileService.getSystemProfile();
 
     return res.status(200).json({
       success: true,
@@ -29,7 +25,6 @@ export const get = async (req, res) => {
 /* ================= UPDATE ================= */
 export const update = async (req, res) => {
   try {
-    const { fiscalYearId } = req.query;
     const { systemName, systemDescription, location } = req.body;
 
     let logoUrl;
@@ -43,15 +38,12 @@ export const update = async (req, res) => {
     }
 
     const data =
-      await systemProfileService.updateSystemProfile(
-        {
-          systemName,
-          systemDescription,
-          location,
-          ...(logoUrl && { logoUrl }),
-        },
-        fiscalYearId // 👈 IMPORTANT
-      );
+      await systemProfileService.updateSystemProfile({
+        systemName,
+        systemDescription,
+        location,
+        ...(logoUrl && { logoUrl }),
+      });
 
     return res.status(200).json({
       success: true,

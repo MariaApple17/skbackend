@@ -17,11 +17,11 @@ model SystemProfile {
   createdAt         DateTime   @default(now())
   updatedAt         DateTime   @updatedAt
   deletedAt         DateTime?
-  fiscalYear        FiscalYear @relation(fields: [fiscalYearId], references: [id])
+  FiscalYear        FiscalYear @relation(fields: [fiscalYearId], references: [id])
 }
 
 model SkOfficial {
-  id              Int        @id @default(autoincrement())
+  id              Int         @id @default(autoincrement())
   fiscalYearId    Int
   position        String
   fullName        String
@@ -30,13 +30,12 @@ model SkOfficial {
   email           String?
   gender          Gender
   profileImageUrl String?
-  isActive        Boolean    @default(true)
-  createdAt       DateTime   @default(now())
-  updatedAt       DateTime   @updatedAt
+  isActive        Boolean     @default(true)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
   deletedAt       DateTime?
-
-  fiscalYear      FiscalYear @relation(fields: [fiscalYearId], references: [id])
   plantillas      Plantilla[]
+  fiscalYear      FiscalYear  @relation(fields: [fiscalYearId], references: [id])
 }
 
 model User {
@@ -90,34 +89,34 @@ model RolePermission {
 }
 
 model Program {
-  id                Int       @id @default(autoincrement())
-  code              String    @unique
+  id                Int                    @id @default(autoincrement())
+  code              String                 @unique
   name              String
   description       String?
   committeeInCharge String
   beneficiaries     String
   startDate         DateTime
   endDate           DateTime
-  isActive          Boolean   @default(true)
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  isActive          Boolean                @default(true)
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
   deletedAt         DateTime?
   fiscalYearId      Int?
   allocations       BudgetAllocation[]
-  fiscalYear        FiscalYear? @relation(fields: [fiscalYearId], references: [id])
+  fiscalYear        FiscalYear?            @relation(fields: [fiscalYearId], references: [id])
   documents         ProgramDocumentImage[]
 }
 
 model ProgramDocumentImage {
-  id          Int      @id @default(autoincrement())
+  id          Int       @id @default(autoincrement())
   programId   Int
   imageUrl    String
   title       String?
   description String?
   uploadedBy  String?
-  createdAt   DateTime @default(now())
+  createdAt   DateTime  @default(now())
   deletedAt   DateTime?
-  program     Program  @relation(fields: [programId], references: [id], onDelete: Cascade)
+  program     Program   @relation(fields: [programId], references: [id], onDelete: Cascade)
 
   @@index([programId])
 }
@@ -132,47 +131,45 @@ model FiscalYear {
   procurementRequests ProcurementRequest[]
   programs            Program[]
   skOfficials         SkOfficial[]
-  systemProfile       SystemProfile?
+  SystemProfile       SystemProfile?
 }
 
 model Budget {
-  id                   Int      @id @default(autoincrement())
-  fiscalYearId         Int      @unique
-  totalAmount          Decimal  @db.Decimal(15, 2)
-  administrativeAmount Decimal  @db.Decimal(15, 2)
-  youthAmount          Decimal  @db.Decimal(15, 2)
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  id                   Int                         @id @default(autoincrement())
+  fiscalYearId         Int                         @unique
+  totalAmount          Decimal                     @db.Decimal(15, 2)
+  administrativeAmount Decimal                     @db.Decimal(15, 2)
+  youthAmount          Decimal                     @db.Decimal(15, 2)
+  createdAt            DateTime                    @default(now())
+  updatedAt            DateTime                    @updatedAt
   deletedAt            DateTime?
-  fiscalYear           FiscalYear @relation(fields: [fiscalYearId], references: [id])
+  fiscalYear           FiscalYear                  @relation(fields: [fiscalYearId], references: [id])
   allocations          BudgetAllocation[]
   classificationLimits BudgetClassificationLimit[]
 }
 
 model BudgetClassification {
-  id                Int      @id @default(autoincrement())
-  code              String   @unique
+  id                Int                         @id @default(autoincrement())
+  code              String                      @unique
   name              String
   description       String?
-  allowedCategories BudgetCategory[] @default([ADMINISTRATIVE, YOUTH])
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  allowedCategories BudgetCategory[]            @default([ADMINISTRATIVE, YOUTH])
+  createdAt         DateTime                    @default(now())
+  updatedAt         DateTime                    @updatedAt
   deletedAt         DateTime?
-
   allocations       BudgetAllocation[]
   budgetLimits      BudgetClassificationLimit[]
   objects           ObjectOfExpenditure[]
 }
 
 model BudgetClassificationLimit {
-  id               Int      @id @default(autoincrement())
+  id               Int                  @id @default(autoincrement())
   budgetId         Int
   classificationId Int
   category         BudgetCategory
-  limitAmount      Decimal  @db.Decimal(15, 2)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-
+  limitAmount      Decimal              @db.Decimal(15, 2)
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
   budget           Budget               @relation(fields: [budgetId], references: [id])
   classification   BudgetClassification @relation(fields: [classificationId], references: [id])
 
@@ -181,143 +178,133 @@ model BudgetClassificationLimit {
 }
 
 model ObjectOfExpenditure {
-  id               Int      @id @default(autoincrement())
-  code             String   @unique
+  id               Int                  @id @default(autoincrement())
+  code             String               @unique
   name             String
   description      String?
   classificationId Int
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
   deletedAt        DateTime?
-
   allocations      BudgetAllocation[]
   classification   BudgetClassification @relation(fields: [classificationId], references: [id])
 }
 
 model BudgetAllocation {
-  id                    Int      @id @default(autoincrement())
+  id                    Int                  @id @default(autoincrement())
   budgetId              Int
   programId             Int?
   category              BudgetCategory
   objectOfExpenditureId Int
   classificationId      Int
-  allocatedAmount       Decimal  @db.Decimal(15, 2)
-  usedAmount            Decimal  @default(0) @db.Decimal(15, 2)
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  allocatedAmount       Decimal              @db.Decimal(15, 2)
+  usedAmount            Decimal              @default(0) @db.Decimal(15, 2)
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
   deletedAt             DateTime?
-
-  budget         Budget               @relation(fields: [budgetId], references: [id])
-  classification BudgetClassification @relation(fields: [classificationId], references: [id])
-  object         ObjectOfExpenditure  @relation(fields: [objectOfExpenditureId], references: [id])
-  program        Program?             @relation(fields: [programId], references: [id])
-
-  requests       ProcurementRequest[]
-  plantillas     Plantilla[]
+  budget                Budget               @relation(fields: [budgetId], references: [id])
+  classification        BudgetClassification @relation(fields: [classificationId], references: [id])
+  object                ObjectOfExpenditure  @relation(fields: [objectOfExpenditureId], references: [id])
+  program               Program?             @relation(fields: [programId], references: [id])
+  plantillas            Plantilla[]
+  requests              ProcurementRequest[]
 
   @@index([budgetId, category])
 }
 
 model Vendor {
-  id        Int      @id @default(autoincrement())
+  id        Int                  @id @default(autoincrement())
   name      String
   address   String?
   contact   String?
-  createdAt DateTime @default(now())
+  createdAt DateTime             @default(now())
   deletedAt DateTime?
   requests  ProcurementRequest[]
 }
 
 model ProcurementRequest {
-  id           Int      @id @default(autoincrement())
+  id           Int                @id @default(autoincrement())
   title        String
   description  String?
-  amount       Decimal  @db.Decimal(15, 2)
-  status       ProcurementStatus @default(DRAFT)
+  amount       Decimal            @db.Decimal(15, 2)
+  status       ProcurementStatus  @default(DRAFT)
   fiscalYearId Int
   allocationId Int
   vendorId     Int?
   createdById  Int
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
   deletedAt    DateTime?
-
   approvals    Approval[]
   items        ProcurementItem[]
   proofs       ProcurementProof[]
-
-  allocation   BudgetAllocation @relation(fields: [allocationId], references: [id])
-  createdBy    User             @relation(fields: [createdById], references: [id])
-  fiscalYear   FiscalYear       @relation(fields: [fiscalYearId], references: [id])
-  vendor       Vendor?          @relation(fields: [vendorId], references: [id])
+  allocation   BudgetAllocation   @relation(fields: [allocationId], references: [id])
+  createdBy    User               @relation(fields: [createdById], references: [id])
+  fiscalYear   FiscalYear         @relation(fields: [fiscalYearId], references: [id])
+  vendor       Vendor?            @relation(fields: [vendorId], references: [id])
 }
 
 model ProcurementItem {
-  id          Int      @id @default(autoincrement())
+  id          Int                @id @default(autoincrement())
   requestId   Int
   name        String
   description String?
   unit        String?
   quantity    Int
-  unitCost    Decimal  @db.Decimal(15, 2)
-  totalPrice  Decimal  @db.Decimal(15, 2)
-  createdAt   DateTime @default(now())
+  unitCost    Decimal            @db.Decimal(15, 2)
+  totalPrice  Decimal            @db.Decimal(15, 2)
+  createdAt   DateTime           @default(now())
   deletedAt   DateTime?
-
   request     ProcurementRequest @relation(fields: [requestId], references: [id])
 }
 
 model ProcurementProof {
-  id           Int      @id @default(autoincrement())
+  id           Int                @id @default(autoincrement())
   requestId    Int
   type         String
   fileUrl      String
   description  String?
   uploadedById Int
-  createdAt    DateTime @default(now())
+  createdAt    DateTime           @default(now())
   deletedAt    DateTime?
-
   request      ProcurementRequest @relation(fields: [requestId], references: [id])
   uploadedBy   User               @relation(fields: [uploadedById], references: [id])
 }
 
 model Approval {
-  id         Int      @id @default(autoincrement())
+  id         Int                @id @default(autoincrement())
   requestId  Int
   approverId Int
-  status     ApprovalStatus @default(PENDING)
+  status     ApprovalStatus     @default(PENDING)
   remarks    String?
-  createdAt  DateTime @default(now())
+  createdAt  DateTime           @default(now())
   deletedAt  DateTime?
-
   approver   User               @relation(fields: [approverId], references: [id])
   request    ProcurementRequest @relation(fields: [requestId], references: [id])
 }
 
 model Plantilla {
-  id                 Int      @id @default(autoincrement())
+  id                 Int              @id @default(autoincrement())
   officialId         Int
   budgetAllocationId Int
   amount             Float
   periodCovered      String
   remarks            String?
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
-
-  official           SkOfficial      @relation(fields: [officialId], references: [id])
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
   budgetAllocation   BudgetAllocation @relation(fields: [budgetAllocationId], references: [id])
+  official           SkOfficial       @relation(fields: [officialId], references: [id])
 }
 
 model SystemLog {
-  id        Int      @id @default(autoincrement())
+  id        Int       @id @default(autoincrement())
   level     LogLevel
   message   String
   context   String?
   userId    Int?
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
   deletedAt DateTime?
-
-  user      User? @relation(fields: [userId], references: [id])
+  user      User?     @relation(fields: [userId], references: [id])
 }
 
 enum UserStatus {
