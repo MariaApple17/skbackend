@@ -21,6 +21,16 @@ class SkPlantillaService {
           deletedAt: null,
         },
       });
+      const activeYear = await tx.fiscalYear.findFirst({
+  where: {
+    isActive: true,
+    deletedAt: null,
+  },
+});
+
+if (!activeYear) {
+  throw new Error("No active fiscal year found");
+}
 
       if (!budget) {
         throw new Error('Budget allocation not found');
@@ -35,16 +45,16 @@ class SkPlantillaService {
           `Insufficient remaining budget. Remaining: ₱${remaining.toLocaleString()}`
         );
       }
-
-      const plantilla = await tx.plantilla.create({
-        data: {
-          officialId,
-          budgetAllocationId,
-          amount,
-          periodCovered: data.periodCovered,
-          remarks: data.remarks,
-        },
-      });
+const plantilla = await tx.plantilla.create({
+  data: {
+    officialId,
+    budgetAllocationId,
+    fiscalYearId: activeYear.id,   // ✅ ADD THIS
+    amount,
+    periodCovered: data.periodCovered,
+    remarks: data.remarks,
+  },
+});
 
       await tx.budgetAllocation.update({
         where: { id: budgetAllocationId },
@@ -138,19 +148,36 @@ class SkPlantillaService {
   }
 
   async getAllPlantilla() {
-    return prisma.plantilla.findMany({
-      include: {
-        official: true,
-        budgetAllocation: {
-          include: {
-            classification: true,
-            object: true,
-          },
+
+  // 1️⃣ Get active fiscal year
+  const activeYear = await prisma.fiscalYear.findFirst({
+    where: {
+      isActive: true,
+      deletedAt: null,
+    },
+  });
+
+  if (!activeYear) {
+    throw new Error("No active fiscal year found");
+  }
+
+  // 2️⃣ Only get plantilla for that year
+  return prisma.plantilla.findMany({
+    where: {
+      fiscalYearId: activeYear.id,
+    },
+    include: {
+      official: true,
+      budgetAllocation: {
+        include: {
+          classification: true,
+          object: true,
         },
       },
-      orderBy: { createdAt: 'desc' },
-    });
-  }
+    },
+    orderBy: { createdAt: "desc" },
+  });
+}
 }
 
 export default new SkPlantillaService();
