@@ -7,12 +7,21 @@ const SYSTEM_PROFILE_FOLDER =
 /* ================= GET ================= */
 export const get = async (req, res) => {
   try {
-    const data = await systemProfileService.getSystemProfile();
-    return res.status(200).json({ success: true, data });
+    const { fiscalYearId } = req.query;
+
+    const data = await systemProfileService.getSystemProfile(
+      fiscalYearId
+    );
+
+    return res.status(200).json({
+      success: true,
+      data,
+    });
   } catch (error) {
     return res.status(error.statusCode || 400).json({
       success: false,
-      message: error.message || 'Failed to fetch system profile',
+      message:
+        error.message || 'Failed to fetch system profile',
     });
   }
 };
@@ -20,6 +29,7 @@ export const get = async (req, res) => {
 /* ================= UPDATE ================= */
 export const update = async (req, res) => {
   try {
+    const { fiscalYearId } = req.query;
     const { systemName, systemDescription, location } = req.body;
 
     let logoUrl;
@@ -32,12 +42,16 @@ export const update = async (req, res) => {
       );
     }
 
-    const data = await systemProfileService.updateSystemProfile({
-      systemName,
-      systemDescription,
-      location,
-      ...(logoUrl && { logoUrl }),
-    });
+    const data =
+      await systemProfileService.updateSystemProfile(
+        {
+          systemName,
+          systemDescription,
+          location,
+          ...(logoUrl && { logoUrl }),
+        },
+        fiscalYearId // 👈 IMPORTANT
+      );
 
     return res.status(200).json({
       success: true,
@@ -47,7 +61,8 @@ export const update = async (req, res) => {
   } catch (error) {
     return res.status(error.statusCode || 400).json({
       success: false,
-      message: error.message || 'Failed to update system profile',
+      message:
+        error.message || 'Failed to update system profile',
     });
   }
 };

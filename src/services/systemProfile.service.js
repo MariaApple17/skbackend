@@ -6,32 +6,59 @@ import { db } from '../config/db.config.js';
 const isNonEmptyString = (val) =>
   typeof val === 'string' && val.trim().length > 0;
 
-/* ================= GET ================= */
-export const getSystemProfile = async () => {
-  const fiscalYear = await db.fiscalYear.findFirst({
-    where: { isActive: true },
-  });
+/* ======================================================
+   RESOLVE FISCAL YEAR
+====================================================== */
+const resolveFiscalYear = async (fiscalYearId) => {
+  let fiscalYear;
 
-  if (!fiscalYear) {
-    throw {
-      statusCode: 404,
-      message: 'No active fiscal year found',
-    };
+  if (fiscalYearId) {
+    fiscalYear = await db.fiscalYear.findUnique({
+      where: { id: Number(fiscalYearId) },
+    });
+
+    if (!fiscalYear) {
+      throw {
+        statusCode: 404,
+        message: 'Fiscal year not found',
+      };
+    }
+  } else {
+    fiscalYear = await db.fiscalYear.findFirst({
+      where: { isActive: true },
+      orderBy: { year: 'desc' },
+    });
+
+    if (!fiscalYear) {
+      throw {
+        statusCode: 404,
+        message: 'No active fiscal year found',
+      };
+    }
   }
+
+  return fiscalYear;
+};
+
+/* ======================================================
+   GET SYSTEM PROFILE
+====================================================== */
+export const getSystemProfile = async (fiscalYearId) => {
+  const fiscalYear = await resolveFiscalYear(fiscalYearId);
 
   let profile = await db.systemProfile.findUnique({
     where: { fiscalYearId: fiscalYear.id },
     include: { fiscalYear: true },
   });
 
-  // ✅ auto-create default
+  // Auto-create profile if missing
   if (!profile) {
     profile = await db.systemProfile.create({
       data: {
         fiscalYearId: fiscalYear.id,
         systemName: 'SK Budget Management System',
         systemDescription: 'Default system profile',
-        location: 'Baranggay BongBong, Trinidad, Bohol',
+        location: '',
         logoUrl: '',
       },
       include: { fiscalYear: true },
@@ -41,18 +68,14 @@ export const getSystemProfile = async () => {
   return profile;
 };
 
-/* ================= UPDATE ================= */
-export const updateSystemProfile = async (payload) => {
-  const fiscalYear = await db.fiscalYear.findFirst({
-    where: { isActive: true },
-  });
-
-  if (!fiscalYear) {
-    throw {
-      statusCode: 404,
-      message: 'No active fiscal year found',
-    };
-  }
+/* ======================================================
+   UPDATE SYSTEM PROFILE
+====================================================== */
+export const updateSystemProfile = async (
+  payload,
+  fiscalYearId
+) => {
+  const fiscalYear = await resolveFiscalYear(fiscalYearId);
 
   const profile = await db.systemProfile.findUnique({
     where: { fiscalYearId: fiscalYear.id },
@@ -67,7 +90,6 @@ export const updateSystemProfile = async (payload) => {
 
   /* ================= VALIDATION ================= */
 
-  // systemName is required when provided
   if (
     payload.systemName !== undefined &&
     !isNonEmptyString(payload.systemName)
@@ -108,7 +130,6 @@ export const updateSystemProfile = async (payload) => {
     };
   }
 
-  // ❌ Prevent empty update
   if (Object.keys(payload).length === 0) {
     throw {
       statusCode: 400,
@@ -116,9 +137,9 @@ export const updateSystemProfile = async (payload) => {
     };
   }
 
-  /* ================= UPDATE ================= */
   return db.systemProfile.update({
     where: { id: profile.id },
     data: payload,
+    include: { fiscalYear: true },
   });
 };
