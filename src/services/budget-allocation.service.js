@@ -184,8 +184,10 @@ export const getAllBudgetAllocations = async (params = {}) => {
   const where = { deletedAt: null };
   if (fiscalYearId) {
   where.budget = {
-    fiscalYearId: Number(fiscalYearId),
-  };
+  fiscalYearId: Number(fiscalYearId),
+  deletedAt: null,   // 🔥 important
+};
+
 } else if (budgetId) {
   where.budgetId = Number(budgetId);
 }
@@ -529,36 +531,4 @@ export const checkExistingObjectAllocation = async ({
     },
   };
   
-};
-export const getActiveYearBudgetAllocations = async () => {
-
-  const activeYear = await db.fiscalYear.findFirst({
-    where: {
-      isActive: true,
-      deletedAt: null,
-    },
-  });
-
-  if (!activeYear) {
-    throw new Error("No active fiscal year found");
-  }
-
-  return db.budgetAllocation.findMany({
-    where: {
-      deletedAt: null,
-      budget: {
-        fiscalYearId: activeYear.id,
-      },
-      category: 'ADMINISTRATIVE', // if plantilla only uses admin
-    },
-    include: {
-      budget: { include: { fiscalYear: true } },
-      classification: true,
-      object: true,
-      program: true,
-    },
-    orderBy: {
-      createdAt: 'desc',
-    },
-  });
 };

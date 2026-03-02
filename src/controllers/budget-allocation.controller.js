@@ -25,25 +25,40 @@ export const createBudgetAllocation = async (req, res) => {
 /* ================= GET ALL ================= */
 export const getAllBudgetAllocations = async (req, res) => {
   try {
-   const {
-  search,
-  budgetId,
-  fiscalYearId, // ✅ ADD THIS
-  programId,
-  classificationId,
-  objectOfExpenditureId,
-  category,
-  page,
-  limit,
-  sortBy,
-  sortOrder,
-} = req.query;
+    // 🔥 Always determine active fiscal year
+    const activeYear = await db.fiscalYear.findFirst({
+      where: {
+        isActive: true,
+        deletedAt: null,
+      },
+    });
+
+    if (!activeYear) {
+      return res.status(200).json({
+        success: true,
+        data: [],
+        pagination: null,
+      });
+    }
+
+    const {
+      search,
+      budgetId,
+      programId,
+      classificationId,
+      objectOfExpenditureId,
+      category,
+      page,
+      limit,
+      sortBy,
+      sortOrder,
+    } = req.query;
 
     const result =
       await budgetAllocationService.getAllBudgetAllocations({
         search: search || undefined,
         budgetId: budgetId ? Number(budgetId) : undefined,
-        fiscalYearId: fiscalYearId ? Number(fiscalYearId) : undefined,
+        fiscalYearId: activeYear.id, // 🔥 FORCE ACTIVE YEAR
         programId: programId ? Number(programId) : undefined,
         classificationId: classificationId
           ? Number(classificationId)
@@ -51,7 +66,7 @@ export const getAllBudgetAllocations = async (req, res) => {
         objectOfExpenditureId: objectOfExpenditureId
           ? Number(objectOfExpenditureId)
           : undefined,
-        category: category || undefined, // ✅ PASS IT
+        category: category || undefined,
         page: page ? Number(page) : undefined,
         limit: limit ? Number(limit) : undefined,
         sortBy,

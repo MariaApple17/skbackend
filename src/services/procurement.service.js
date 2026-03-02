@@ -75,18 +75,14 @@ const VALID_STATUSES = [
   'PURCHASED',
   'COMPLETED',
 ];
-
-/* ================= CREATE REQUEST ================= */
 export const createRequest = async (data, userId, fiscalYearId) => {
   if (!fiscalYearId) {
-    throw new AppError(
-      'No active fiscal year found',
-      400,
-      'NO_FISCAL_YEAR'
-    );
+    throw new AppError('No active fiscal year found', 400);
   }
 
+  // ✅ DEFINE allocationId FIRST
   const allocationId = toNumber(data.allocationId, 'allocationId');
+
   const items = normalizeItems(data.items);
 
   const computedAmount = items.reduce(
@@ -95,11 +91,29 @@ export const createRequest = async (data, userId, fiscalYearId) => {
   );
 
   if (computedAmount <= 0) {
-    throw new AppError(
-      'Total amount must be greater than zero',
-      400,
-      'INVALID_AMOUNT'
-    );
+    throw new AppError('Total amount must be greater than zero', 400);
+  }
+
+  // ✅ NOW you can use allocationId
+  const allocation = await db.budgetAllocation.findUnique({
+    where: { id: allocationId },
+    include: { budget: true },
+  });
+
+  if (!allocation) {
+    throw new AppError('Allocation not found', 404);
+  }
+
+  if (allocation.budget.fiscalYearId !== Number(fiscalYearId)) {
+    throw new AppError('Allocation does not belong to active fiscal year', 400);
+  }
+
+  const allocated = Number(allocation.allocatedAmount);
+  const used = Number(allocation.usedAmount);
+  const remaining = allocated - used;
+
+  if (computedAmount > remaining) {
+    throw new AppError('Insufficient remaining budget', 400);
   }
 
   return db.procurementRequest.create({
@@ -108,23 +122,12 @@ export const createRequest = async (data, userId, fiscalYearId) => {
       description: data.description ?? null,
       amount: computedAmount,
       allocationId,
-      fiscalYearId: toNumber(fiscalYearId, 'fiscalYearId'), // ✅ REQUIRED
-      createdById: toNumber(userId, 'userId'),
+      fiscalYearId: Number(fiscalYearId),
+      createdById: Number(userId),
       items: { create: items },
     },
-    include: {
-  items: true,
-  allocation: {
-    include: {
-      program: true,
-      classification: true,
-      object: true,
-    },
-  },
-},
   });
 };
-
 /* ================= UPDATE REQUEST ================= */
 export const updateRequest = async (id, data) => {
   id = toNumber(id, 'requestId');
