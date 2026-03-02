@@ -186,12 +186,9 @@ const where = {
   deletedAt: null,
   budget: {
     deletedAt: null,
-    ...(Number.isFinite(Number(fiscalYearId)) && {
-      fiscalYearId: Number(fiscalYearId),
-    }),
+    fiscalYearId: Number(fiscalYearId), // 🔥 FORCE selected year
   },
 };
-
 
   if (Number.isFinite(programId)) {
     where.programId = programId;
