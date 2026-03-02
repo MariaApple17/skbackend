@@ -4,57 +4,73 @@ const prisma = new PrismaClient();
 
 class SkPlantillaService {
 
+  /* ================= CREATE ================= */
   async createPlantilla(data) {
     return prisma.$transaction(async (tx) => {
 
       const officialId = Number(data.officialId);
       const budgetAllocationId = Number(data.budgetAllocationId);
+      const fiscalYearId = Number(data.fiscalYearId);
       const amount = Number(data.amount);
 
-      if (!officialId || !budgetAllocationId || !amount) {
+      if (!officialId || !budgetAllocationId || !fiscalYearId || !amount) {
         throw new Error('Invalid input data');
       }
 
+      /* 🔎 Validate allocation belongs to fiscal year */
       const budget = await tx.budgetAllocation.findFirst({
         where: {
           id: budgetAllocationId,
           deletedAt: null,
+          budget: {
+            fiscalYearId: fiscalYearId,
+          },
+        },
+        include: {
+          budget: true,
         },
       });
-      const activeYear = await tx.fiscalYear.findFirst({
-  where: {
-    isActive: true,
-    deletedAt: null,
-  },
-});
-
-if (!activeYear) {
-  throw new Error("No active fiscal year found");
-}
 
       if (!budget) {
-        throw new Error('Budget allocation not found');
+        throw new Error('Budget allocation not found for selected fiscal year');
       }
 
-      const allocated = parseFloat(budget.allocatedAmount.toString());
-      const used = parseFloat(budget.usedAmount.toString());
+      const allocated = Number(budget.allocatedAmount);
+      const used = Number(budget.usedAmount);
       const remaining = allocated - used;
+
+      if (amount <= 0) {
+        throw new Error('Amount must be greater than zero');
+      }
 
       if (amount > remaining) {
         throw new Error(
           `Insufficient remaining budget. Remaining: ₱${remaining.toLocaleString()}`
         );
       }
-const plantilla = await tx.plantilla.create({
-  data: {
-    officialId,
-    budgetAllocationId,
-    fiscalYearId: activeYear.id,   // ✅ ADD THIS
-    amount,
-    periodCovered: data.periodCovered,
-    remarks: data.remarks,
-  },
-});
+
+      /* 🛑 Optional: prevent duplicate official per fiscal year */
+      const existingAssignment = await tx.plantilla.findFirst({
+        where: {
+          officialId,
+          fiscalYearId,
+        },
+      });
+
+      if (existingAssignment) {
+        throw new Error('Official already has plantilla for this fiscal year');
+      }
+
+      const plantilla = await tx.plantilla.create({
+        data: {
+          officialId,
+          budgetAllocationId,
+          fiscalYearId,
+          amount,
+          periodCovered: data.periodCovered,
+          remarks: data.remarks,
+        },
+      });
 
       await tx.budgetAllocation.update({
         where: { id: budgetAllocationId },
@@ -69,6 +85,7 @@ const plantilla = await tx.plantilla.create({
     });
   }
 
+  /* ================= UPDATE ================= */
   async updatePlantilla(id, data) {
     return prisma.$transaction(async (tx) => {
 
@@ -78,6 +95,12 @@ const plantilla = await tx.plantilla.create({
 
       if (!existing) {
         throw new Error('Plantilla not found');
+      }
+
+      const newAmount = Number(data.amount);
+
+      if (newAmount <= 0) {
+        throw new Error('Amount must be greater than zero');
       }
 
       const budget = await tx.budgetAllocation.findFirst({
@@ -91,17 +114,15 @@ const plantilla = await tx.plantilla.create({
         throw new Error('Budget allocation not found');
       }
 
-      const allocated = parseFloat(budget.allocatedAmount.toString());
-      const used = parseFloat(budget.usedAmount.toString());
+      const allocated = Number(budget.allocatedAmount);
+      const used = Number(budget.usedAmount);
 
-      // remove old amount before recalculating
+      /* remove old amount first */
       const adjustedUsed = used - existing.amount;
       const remaining = allocated - adjustedUsed;
 
-      const newAmount = Number(data.amount);
-
       if (newAmount > remaining) {
-        throw new Error('Insufficient budget for update');
+        throw new Error('Insufficient remaining budget for update');
       }
 
       await tx.budgetAllocation.update({
@@ -114,13 +135,15 @@ const plantilla = await tx.plantilla.create({
       return tx.plantilla.update({
         where: { id: Number(id) },
         data: {
-          ...data,
           amount: newAmount,
+          periodCovered: data.periodCovered,
+          remarks: data.remarks,
         },
       });
     });
   }
 
+  /* ================= DELETE ================= */
   async deletePlantilla(id) {
     return prisma.$transaction(async (tx) => {
 
@@ -147,35 +170,34 @@ const plantilla = await tx.plantilla.create({
     });
   }
 
-  async getAllPlantilla() {
+  /* ================= GET ALL ================= */
+  async getAllPlantilla(fiscalYearId) {
 
-  const activeYear = await prisma.fiscalYear.findFirst({
-    where: {
-      isActive: true,
-      deletedAt: null,
-    },
-  });
+    if (!fiscalYearId) {
+      throw new Error('Fiscal year is required');
+    }
 
-  if (!activeYear) {
-    throw new Error("No active fiscal year found");
-  }
-
-  return prisma.plantilla.findMany({
-    where: {
-      fiscalYearId: activeYear.id,   // ✅ FILTER HERE ONLY
-    },
-    include: {
-      official: true,
-      budgetAllocation: {
-        include: {
-          classification: true,
-          object: true,
+    return prisma.plantilla.findMany({
+      where: {
+        fiscalYearId: Number(fiscalYearId),
+      },
+      include: {
+        official: true,
+        budgetAllocation: {
+          include: {
+            classification: true,
+            object: true,
+            budget: {
+              include: {
+                fiscalYear: true,
+              },
+            },
+          },
         },
       },
-    },
-    orderBy: { createdAt: "desc" },
-  });
-}
+      orderBy: { createdAt: 'desc' },
+    });
+  }
 }
 
 export default new SkPlantillaService();

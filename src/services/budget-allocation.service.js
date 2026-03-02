@@ -181,16 +181,17 @@ export const getAllBudgetAllocations = async (params = {}) => {
   const safeSortOrder = sortOrder === 'asc' ? 'asc' : 'desc';
 
   /* ================= WHERE ================= */
-  const where = { deletedAt: null };
-  if (fiscalYearId) {
-  where.budget = {
-  fiscalYearId: Number(fiscalYearId),
-  deletedAt: null,   // 🔥 important
+  /* ================= WHERE ================= */
+const where = {
+  deletedAt: null,
+  budget: {
+    deletedAt: null,
+    ...(Number.isFinite(Number(fiscalYearId)) && {
+      fiscalYearId: Number(fiscalYearId),
+    }),
+  },
 };
 
-} else if (budgetId) {
-  where.budgetId = Number(budgetId);
-}
 
   if (Number.isFinite(programId)) {
     where.programId = programId;
@@ -235,7 +236,6 @@ export const getAllBudgetAllocations = async (params = {}) => {
     }),
     db.budgetAllocation.count({ where }),
   ]);
-
 
   /* ================= RESPONSE ================= */
   return {
@@ -530,5 +530,4 @@ export const checkExistingObjectAllocation = async ({
         Number(existing.usedAmount),
     },
   };
-  
 };

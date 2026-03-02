@@ -25,20 +25,29 @@ export const createBudgetAllocation = async (req, res) => {
 /* ================= GET ALL ================= */
 export const getAllBudgetAllocations = async (req, res) => {
   try {
-    // 🔥 Always determine active fiscal year
-    const activeYear = await db.fiscalYear.findFirst({
-      where: {
-        isActive: true,
-        deletedAt: null,
-      },
-    });
+    let fiscalYearId;
 
-    if (!activeYear) {
-      return res.status(200).json({
-        success: true,
-        data: [],
-        pagination: null,
+    // ✅ If frontend sends fiscalYearId → use it
+    if (req.query.fiscalYearId) {
+      fiscalYearId = Number(req.query.fiscalYearId);
+    } else {
+      // ✅ Otherwise fallback to active year
+      const activeYear = await db.fiscalYear.findFirst({
+        where: {
+          isActive: true,
+          deletedAt: null,
+        },
       });
+
+      if (!activeYear) {
+        return res.status(200).json({
+          success: true,
+          data: [],
+          pagination: null,
+        });
+      }
+
+      fiscalYearId = activeYear.id;
     }
 
     const {
@@ -58,7 +67,7 @@ export const getAllBudgetAllocations = async (req, res) => {
       await budgetAllocationService.getAllBudgetAllocations({
         search: search || undefined,
         budgetId: budgetId ? Number(budgetId) : undefined,
-        fiscalYearId: activeYear.id, // 🔥 FORCE ACTIVE YEAR
+        fiscalYearId, // 🔥 NOW DYNAMIC
         programId: programId ? Number(programId) : undefined,
         classificationId: classificationId
           ? Number(classificationId)
@@ -78,6 +87,7 @@ export const getAllBudgetAllocations = async (req, res) => {
       data: result.data,
       pagination: result.pagination,
     });
+
   } catch (error) {
     return res.status(500).json({
       success: false,
