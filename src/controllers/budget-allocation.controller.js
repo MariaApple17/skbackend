@@ -1,3 +1,4 @@
+import { db } from '../config/db.config.js';
 import * as budgetAllocationService
   from '../services/budget-allocation.service.js';
 
@@ -89,11 +90,12 @@ export const getAllBudgetAllocations = async (req, res) => {
     });
 
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: error?.message || 'Failed to fetch budget allocations',
-    });
-  }
+  console.error("GET ALLOCATIONS ERROR:", error);
+  return res.status(500).json({
+    success: false,
+    message: error.message,
+  });
+}
 };
 
 /* ================= GET BY ID ================= */

@@ -185,10 +185,12 @@ export const getAllBudgetAllocations = async (params = {}) => {
 const where = {
   deletedAt: null,
   budget: {
-    deletedAt: null,
-    ...(Number.isFinite(Number(fiscalYearId)) && {
-      fiscalYearId: Number(fiscalYearId),
-    }),
+    is: {
+      deletedAt: null,
+      ...(Number.isFinite(Number(fiscalYearId)) && {
+        fiscalYearId: Number(fiscalYearId),
+      }),
+    },
   },
 };
 
@@ -210,14 +212,50 @@ const where = {
 }
 
   if (search && search.trim()) {
-    where.OR = [
-      { program: { name: { contains: search } } },
-      { program: { code: { contains: search } } },
-      { classification: { name: { contains: search } } },
-      { classification: { code: { contains: search } } },
-      { object: { name: { contains: search } } },
-      { object: { code: { contains: search } } },
-    ];
+     where.OR = [
+  {
+    program: {
+      is: {
+        name: { contains: search, mode: 'insensitive' }
+      }
+    }
+  },
+  {
+    program: {
+      is: {
+        code: { contains: search, mode: 'insensitive' }
+      }
+    }
+  },
+  {
+    classification: {
+      is: {
+        name: { contains: search, mode: 'insensitive' }
+      }
+    }
+  },
+  {
+    classification: {
+      is: {
+        code: { contains: search, mode: 'insensitive' }
+      }
+    }
+  },
+  {
+    object: {
+      is: {
+        name: { contains: search, mode: 'insensitive' }
+      }
+    }
+  },
+  {
+    object: {
+      is: {
+        code: { contains: search, mode: 'insensitive' }
+      }
+    }
+  }
+];
   }
 
   /* ================= QUERY ================= */
