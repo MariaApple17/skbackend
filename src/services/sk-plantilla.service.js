@@ -9,28 +9,23 @@ class SkPlantillaService {
     return prisma.$transaction(async (tx) => {
 
       const officialId = Number(data.officialId);
-      const budgetAllocationId = Number(data.budgetAllocationId);
-      const fiscalYearId = Number(data.fiscalYearId);
-      const amount = Number(data.amount);
+const budgetAllocationId = Number(data.budgetAllocationId);
+const fiscalYearId = Number(data.fiscalYearId);
+const amount = Number(data.amount);
 
-      if (!officialId || !budgetAllocationId || !fiscalYearId || !amount) {
-        throw new Error('Invalid input data');
-      }
+if (!officialId || !budgetAllocationId || !fiscalYearId || !amount) {
+  throw new Error('Invalid input data');
+}
 
-      /* 🔎 Validate allocation belongs to fiscal year */
-      const budget = await tx.budgetAllocation.findFirst({
-        where: {
-          id: budgetAllocationId,
-          deletedAt: null,
-          budget: {
-            fiscalYearId: fiscalYearId,
-          },
-        },
-        include: {
-          budget: true,
-        },
-      });
-
+     const budget = await tx.budgetAllocation.findFirst({
+  where: {
+    id: budgetAllocationId,
+    deletedAt: null,
+    budget: {
+      fiscalYearId: fiscalYearId,
+    },
+  },
+});
       if (!budget) {
         throw new Error('Budget allocation not found for selected fiscal year');
       }
@@ -42,20 +37,19 @@ class SkPlantillaService {
       if (amount <= 0) {
         throw new Error('Amount must be greater than zero');
       }
-
-      if (amount > remaining) {
-        throw new Error(
-          `Insufficient remaining budget. Remaining: ₱${remaining.toLocaleString()}`
-        );
-      }
+if (amount > remaining) {
+  throw new Error(
+    `Insufficient remaining budget. Remaining: ₱${remaining}`
+  );
+}
 
       /* 🛑 Optional: prevent duplicate official per fiscal year */
       const existingAssignment = await tx.plantilla.findFirst({
-        where: {
-          officialId,
-          fiscalYearId,
-        },
-      });
+  where: {
+    officialId,
+    fiscalYearId,
+  },
+});
 
       if (existingAssignment) {
         throw new Error('Official already has plantilla for this fiscal year');
