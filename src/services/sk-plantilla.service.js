@@ -173,33 +173,37 @@ class SkPlantillaService {
   /* ================= GET ALL ================= */
   async getAllPlantilla(fiscalYearId) {
 
-  const fyId = Number(fiscalYearId); // convert to number
+  if (fiscalYearId === undefined || fiscalYearId === null) {
+    return []; // do not crash
+  }
 
-  if (!fyId) {
-    throw new Error('Fiscal year is required');
+  const fyId = Number(fiscalYearId);
+
+  if (isNaN(fyId)) {
+    return []; // prevent 500
   }
 
   return prisma.plantilla.findMany({
     where: {
       fiscalYearId: fyId,
     },
-      include: {
-        official: true,
-        budgetAllocation: {
-          include: {
-            classification: true,
-            object: true,
-            budget: {
-              include: {
-                fiscalYear: true,
-              },
+    include: {
+      official: true,
+      budgetAllocation: {
+        include: {
+          classification: true,
+          object: true,
+          budget: {
+            include: {
+              fiscalYear: true,
             },
           },
         },
       },
-      orderBy: { createdAt: 'desc' },
-    });
-  }
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+}
 }
 
 export default new SkPlantillaService();
