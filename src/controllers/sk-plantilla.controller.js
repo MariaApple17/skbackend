@@ -25,23 +25,26 @@ class SkPlantillaController {
 
   /* ================= GET ALL ================= */
   async getAll(req, res) {
-    try {
-      const result = await skPlantillaService.getAllPlantilla();
+  try {
+    const { fiscalYearId } = req.query;
 
-      return res.status(200).json({
-        success: true,
-        data: result,
-      });
+    console.log("QUERY fiscalYearId:", fiscalYearId);
 
-    } catch (error) {
-      console.error('GET PLANTILLA ERROR:', error);
+    const result = await skPlantillaService.getAllPlantilla(fiscalYearId);
 
-      return res.status(500).json({
-        success: false,
-        message: error.message || 'Failed to fetch plantilla',
-      });
-    }
+    return res.status(200).json({
+      success: true,
+      data: result,
+    });
+
+  } catch (error) {
+    console.error("GET PLANTILLA ERROR:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
+}
 
   /* ================= UPDATE ================= */
   async update(req, res) {

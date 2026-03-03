@@ -173,14 +173,16 @@ class SkPlantillaService {
   /* ================= GET ALL ================= */
   async getAllPlantilla(fiscalYearId) {
 
-    if (!fiscalYearId) {
-      throw new Error('Fiscal year is required');
-    }
+  const fyId = Number(fiscalYearId); // convert to number
 
-    return prisma.plantilla.findMany({
-      where: {
-        fiscalYearId: Number(fiscalYearId),
-      },
+  if (!fyId) {
+    throw new Error('Fiscal year is required');
+  }
+
+  return prisma.plantilla.findMany({
+    where: {
+      fiscalYearId: fyId,
+    },
       include: {
         official: true,
         budgetAllocation: {
