@@ -165,39 +165,33 @@ if (amount > remaining) {
   }
 
   /* ================= GET ALL ================= */
-  async getAllPlantilla(fiscalYearId) {
 
-  if (fiscalYearId === undefined || fiscalYearId === null) {
-    return []; // do not crash
-  }
+  async getAllBudgetAllocations(fiscalYearId) {
+
+  if (!fiscalYearId) return [];
 
   const fyId = Number(fiscalYearId);
+  if (isNaN(fyId)) return [];
 
-  if (isNaN(fyId)) {
-    return []; // prevent 500
-  }
-
-  return prisma.plantilla.findMany({
+  return prisma.budgetAllocation.findMany({
     where: {
-      fiscalYearId: fyId,
+      deletedAt: null,
+      budget: {
+        fiscalYearId: fyId,   // 🔥 THIS IS THE KEY
+      },
     },
     include: {
-      official: true,
-      budgetAllocation: {
+      classification: true,
+      object: true,
+      budget: {
         include: {
-          classification: true,
-          object: true,
-          budget: {
-            include: {
-              fiscalYear: true,
-            },
-          },
+          fiscalYear: true,
         },
       },
     },
-    orderBy: { createdAt: 'desc' },
   });
 }
 }
+
 
 export default new SkPlantillaService();
