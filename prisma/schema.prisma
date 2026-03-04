@@ -346,6 +346,7 @@ enum PermissionModule {
   USER_MANAGEMENT
   ROLES_PERMISSION
   REPORTS_PERMISSION
+  SK_PLANTILLA
 }
 
 enum Gender {

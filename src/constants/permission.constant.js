@@ -25,4 +25,16 @@ export const PERMISSIONS = [
   { key: 'ROLES_VIEW', module: 'ROLES_PERMISSION' },
 
   { key: 'REPORTS_VIEW', module: 'REPORTS_PERMISSION' },
+ 
+  {
+    key: 'PLANTILLA_VIEW',
+    description: 'View SK Plantilla',
+    module: 'SK_PLANTILLA',
+  },
+  {
+    key: 'PLANTILLA_CREATE',
+    description: 'Create SK Plantilla',
+    module: 'SK_PLANTILLA',
+  },
+  
 ];
