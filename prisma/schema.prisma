@@ -128,11 +128,11 @@ model FiscalYear {
   createdAt           DateTime             @default(now())
   deletedAt           DateTime?
   budgets             Budget?
+  plantillas          Plantilla[]
   procurementRequests ProcurementRequest[]
   programs            Program[]
   skOfficials         SkOfficial[]
   SystemProfile       SystemProfile?
-  plantillas Plantilla[]
 }
 
 model Budget {
@@ -293,10 +293,10 @@ model Plantilla {
   remarks            String?
   createdAt          DateTime         @default(now())
   updatedAt          DateTime         @updatedAt
+  fiscalYearId       Int?
   budgetAllocation   BudgetAllocation @relation(fields: [budgetAllocationId], references: [id])
+  fiscalYear         FiscalYear?      @relation(fields: [fiscalYearId], references: [id])
   official           SkOfficial       @relation(fields: [officialId], references: [id])
-  fiscalYearId      Int?
-  fiscalYear        FiscalYear?            @relation(fields: [fiscalYearId], references: [id])
 }
 
 model SystemLog {

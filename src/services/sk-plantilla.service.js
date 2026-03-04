@@ -166,30 +166,47 @@ if (amount > remaining) {
 
   /* ================= GET ALL ================= */
 
-  async getAllBudgetAllocations(fiscalYearId) {
-
-  if (!fiscalYearId) return [];
+  async getPlantillaByFiscalYear(fiscalYearId) {
 
   const fyId = Number(fiscalYearId);
-  if (isNaN(fyId)) return [];
 
-  return prisma.budgetAllocation.findMany({
+  if (isNaN(fyId)) {
+    throw new Error("Invalid fiscalYearId");
+  }
+
+  const plantillas = await prisma.plantilla.findMany({
     where: {
-      deletedAt: null,
-      budget: {
-        fiscalYearId: fyId,   // 🔥 THIS IS THE KEY
-      },
+      fiscalYearId: fyId
     },
-    include: {
-      classification: true,
-      object: true,
-      budget: {
-        include: {
-          fiscalYear: true,
-        },
+    select: {
+      id: true,
+      amount: true,
+      periodCovered: true,
+      remarks: true,
+
+      official: {
+        select: {
+          fullName: true,
+          position: true
+        }
       },
+
+      budgetAllocation: {
+        select: {
+          classification: {
+            select: {
+              name: true
+            }
+          }
+        }
+      }
     },
+    orderBy: {
+      createdAt: "desc"
+    }
   });
+
+  return plantillas;
 }
 }
 

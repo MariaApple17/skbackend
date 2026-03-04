@@ -24,11 +24,13 @@ class SkPlantillaController {
   }
 
   /* ================= GET ALL ================= */
-  async getAll(req, res) {
+ async getAll(req, res) {
   try {
     const { fiscalYearId } = req.query;
 
-    const result = await budgetAllocationService.getAllBudgetAllocations(fiscalYearId);
+    console.log("Fiscal Year ID:", fiscalYearId);
+
+    const result = await skPlantillaService.getPlantillaByFiscalYear(fiscalYearId);
 
     return res.json({
       success: true,
@@ -36,6 +38,9 @@ class SkPlantillaController {
     });
 
   } catch (error) {
+
+    console.error("PLANTILLA ERROR:", error); // 🔴 THIS WILL SHOW THE REAL ERROR
+
     return res.status(500).json({
       success: false,
       message: error.message,
