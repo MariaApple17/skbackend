@@ -51,6 +51,7 @@ model User {
   approvals           Approval[]
   proofs              ProcurementProof[]
   procurementRequests ProcurementRequest[]
+  programApprovals    ProgramApproval[]
   logs                SystemLog[]
   role                Role                 @relation(fields: [roleId], references: [id])
 }
@@ -102,8 +103,10 @@ model Program {
   updatedAt         DateTime               @updatedAt
   deletedAt         DateTime?
   fiscalYearId      Int?
+  status            ProgramStatus          @default(DRAFT)
   allocations       BudgetAllocation[]
   fiscalYear        FiscalYear?            @relation(fields: [fiscalYearId], references: [id])
+  approvals         ProgramApproval[]
   documents         ProgramDocumentImage[]
 }
 
@@ -310,6 +313,17 @@ model SystemLog {
   user      User?     @relation(fields: [userId], references: [id])
 }
 
+model ProgramApproval {
+  id         Int            @id @default(autoincrement())
+  programId  Int
+  approverId Int
+  status     ApprovalStatus @default(PENDING)
+  remarks    String?
+  createdAt  DateTime       @default(now())
+  approver   User           @relation(fields: [approverId], references: [id])
+  program    Program        @relation(fields: [programId], references: [id])
+}
+
 enum UserStatus {
   ACTIVE
   INACTIVE
@@ -358,4 +372,11 @@ enum Gender {
 enum BudgetCategory {
   ADMINISTRATIVE
   YOUTH
+}
+
+enum ProgramStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
 }

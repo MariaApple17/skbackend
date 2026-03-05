@@ -8,6 +8,8 @@ import {
   getPrograms,
   toggleProgramStatus,
   updateProgram,
+  approveProgram,
+  rejectProgram,
 } from '../controllers/program.controller.js';
 import { authMiddleware } from '../middlewares/auth.middleware.js';
 import { uploadProgramImage } from '../middlewares/upload.middleware.js';
@@ -61,6 +63,25 @@ router.patch(
   authMiddleware,
   toggleProgramStatus
 );
+/* ======================================================
+   APPROVE PROGRAM
+====================================================== */
+
+router.patch(
+  "/:id/approve",
+  authMiddleware,
+  approveProgram
+)
+
+/* ======================================================
+   REJECT PROGRAM
+====================================================== */
+
+router.patch(
+  "/:id/reject",
+  authMiddleware,
+  rejectProgram
+)
 
 /* ======================================================
    DELETE (SOFT)

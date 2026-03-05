@@ -1,7 +1,7 @@
-import { db } from '../config/db.config.js';
+import { db } from "../config/db.config.js";
 
 /* ======================================================
-   CREATE PROGRAM (ASSIGN TO ACTIVE FISCAL YEAR)
+   CREATE PROGRAM (DEFAULT STATUS = DRAFT)
 ====================================================== */
 export const createProgramService = async (data) => {
   const {
@@ -16,23 +16,27 @@ export const createProgramService = async (data) => {
     documents = [],
   } = data;
 
-  // ✅ Check unique code
+  /* ---------------- CHECK DUPLICATE CODE ---------------- */
+
   const existing = await db.program.findFirst({
     where: { code, deletedAt: null },
   });
 
   if (existing) {
-    throw new Error('Program code already exists');
+    throw new Error("Program code already exists");
   }
 
-  // ✅ Get active fiscal year
+  /* ---------------- ACTIVE FISCAL YEAR ---------------- */
+
   const activeFiscalYear = await db.fiscalYear.findFirst({
     where: { isActive: true, deletedAt: null },
   });
 
   if (!activeFiscalYear) {
-    throw new Error('No active fiscal year found');
+    throw new Error("No active fiscal year found");
   }
+
+  /* ---------------- CREATE PROGRAM ---------------- */
 
   return db.program.create({
     data: {
@@ -44,7 +48,10 @@ export const createProgramService = async (data) => {
       startDate: new Date(startDate),
       endDate: new Date(endDate),
       isActive,
-      fiscalYearId: activeFiscalYear.id, // 🔥 always link to active FY
+
+      status: "DRAFT", // ✅ FIXED ENUM
+
+      fiscalYearId: activeFiscalYear.id,
 
       ...(documents.length > 0 && {
         documents: {
@@ -62,7 +69,7 @@ export const createProgramService = async (data) => {
 };
 
 /* ======================================================
-   GET ALL PROGRAMS (ONLY ACTIVE FISCAL YEAR)
+   GET ALL PROGRAMS
 ====================================================== */
 export const getAllProgramsService = async (query) => {
   const {
@@ -70,45 +77,38 @@ export const getAllProgramsService = async (query) => {
     isActive,
     startDateFrom,
     startDateTo,
-    sortBy = 'createdAt',
-    sortOrder = 'desc',
+    sortBy = "createdAt",
+    sortOrder = "desc",
     page = 1,
     limit = 10,
   } = query;
 
-  // ✅ Get active fiscal year (DO NOT CRASH)
   const activeFiscalYear = await db.fiscalYear.findFirst({
     where: { isActive: true, deletedAt: null },
   });
 
   if (!activeFiscalYear) {
-    // return empty safely instead of crashing
     return {
       data: [],
-      meta: {
-        total: 0,
-        page: 1,
-        limit: Number(limit),
-        totalPages: 0,
-      },
+      meta: { total: 0, page: 1, limit: Number(limit), totalPages: 0 },
     };
   }
 
   const where = {
     deletedAt: null,
-    fiscalYearId: activeFiscalYear.id, // 🔥 FILTER HERE
+    fiscalYearId: activeFiscalYear.id,
 
     ...(isActive !== undefined && {
-      isActive: isActive === 'true',
+      isActive: isActive === "true",
     }),
 
     ...(q && {
       OR: [
-        { code: { contains: q } },
-        { name: { contains: q } },
-        { description: { contains: q } },
-        { committeeInCharge: { contains: q } },
-        { beneficiaries: { contains: q } },
+        { code: { contains: q, mode: "insensitive" } },
+        { name: { contains: q, mode: "insensitive" } },
+        { description: { contains: q, mode: "insensitive" } },
+        { committeeInCharge: { contains: q, mode: "insensitive" } },
+        { beneficiaries: { contains: q, mode: "insensitive" } },
       ],
     }),
 
@@ -128,13 +128,32 @@ export const getAllProgramsService = async (query) => {
       orderBy: { [sortBy]: sortOrder },
       skip,
       take: Number(limit),
-      include: { documents: true },
+      include: {
+        documents: true,
+        approvals: {
+          include: {
+            approver: true,
+          },
+        },
+      },
     }),
     db.program.count({ where }),
   ]);
 
+  /* FORMAT APPROVAL DATA FOR FRONTEND */
+
+  const formatted = data.map((program) => ({
+    ...program,
+    approvalStatus: program.status.toLowerCase(),
+    approvals: program.apvals?.map((a) => ({
+      member: a.approver.fullName,
+      decision: a.status.toLowerCase(),
+      date: a.createdAt,
+    })),
+  }));
+
   return {
-    data,
+    data: formatted,
     meta: {
       total,
       page: Number(page),
@@ -150,14 +169,89 @@ export const getAllProgramsService = async (query) => {
 export const getProgramByIdService = async (id) => {
   const program = await db.program.findFirst({
     where: { id: Number(id), deletedAt: null },
-    include: { documents: true },
+    include: {
+      documents: true,
+      approvals: {
+        include: {
+          approver: true,
+        },
+      },
+    },
   });
 
   if (!program) {
-    throw new Error('Program not found');
+    throw new Error("Program not found");
   }
 
   return program;
+};
+
+/* ======================================================
+   APPROVE PROGRAM
+====================================================== */
+export const approveProgramService = async (programId, userId) => {
+  programId = Number(programId);
+
+  await getProgramByIdService(programId);
+
+  const existingVote = await db.programApproval.findFirst({
+    where: {
+      programId,
+      approverId: userId,
+    },
+  });
+
+  if (existingVote) {
+    throw new Error("You already voted for this program");
+  }
+
+  await db.programApproval.create({
+    data: {
+      programId,
+      approverId: userId,
+      status: "APPROVED",
+    },
+  });
+
+  const approvals = await db.programApproval.count({
+    where: {
+      programId,
+      status: "APPROVED",
+    },
+  });
+
+  /* 3 APPROVALS = PROGRAM APPROVED */
+
+  if (approvals >= 3) {
+    await db.program.update({
+      where: { id: programId },
+      data: { status: "APPROVED" },
+    });
+  }
+
+  return { message: "Program approved" };
+};
+
+/* ======================================================
+   REJECT PROGRAM
+====================================================== */
+export const rejectProgramService = async (programId, userId) => {
+  programId = Number(programId);
+
+  await db.programApproval.create({
+    data: {
+      programId,
+      approverId: userId,
+      status: "REJECTED",
+    },
+  });
+
+  await db.program.update({
+    where: { id: programId },
+    data: { status: "REJECTED" },
+  });
+
+  return { message: "Program rejected" };
 };
 
 /* ======================================================
@@ -166,13 +260,7 @@ export const getProgramByIdService = async (id) => {
 export const updateProgramService = async (id, data) => {
   const programId = Number(id);
 
-  const existing = await db.program.findFirst({
-    where: { id: programId, deletedAt: null },
-  });
-
-  if (!existing) {
-    throw new Error('Program not found');
-  }
+  await getProgramByIdService(programId);
 
   const updateData = {
     ...(data.code && { code: data.code }),
@@ -181,7 +269,7 @@ export const updateProgramService = async (id, data) => {
     ...(data.committeeInCharge && { committeeInCharge: data.committeeInCharge }),
     ...(data.beneficiaries && { beneficiaries: data.beneficiaries }),
     ...(data.isActive !== undefined && {
-      isActive: data.isActive === true || data.isActive === 'true',
+      isActive: data.isActive === true || data.isActive === "true",
     }),
     ...(data.startDate && { startDate: new Date(data.startDate) }),
     ...(data.endDate && { endDate: new Date(data.endDate) }),
@@ -195,7 +283,7 @@ export const updateProgramService = async (id, data) => {
 };
 
 /* ======================================================
-   TOGGLE STATUS
+   TOGGLE ACTIVE STATUS
 ====================================================== */
 export const toggleProgramStatusService = async (id) => {
   const program = await getProgramByIdService(id);
@@ -207,7 +295,7 @@ export const toggleProgramStatusService = async (id) => {
 };
 
 /* ======================================================
-   SOFT DELETE
+   DELETE PROGRAM (SOFT DELETE)
 ====================================================== */
 export const deleteProgramService = async (id) => {
   await getProgramByIdService(id);
