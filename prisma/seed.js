@@ -114,15 +114,15 @@ async function main() {
       fiscalYearId: fiscalYear.id, // requires @unique
     },
     update: {
-      totalAmount: 1_000_000_000.00,
-      administrativeAmount: 400_000_000.00,
-      youthAmount: 600_000_000.00,
+      totalAmount: 5_000_000.00,
+      administrativeAmount: 3_000_000.00,
+      youthAmount: 2_000_000.00,
     },
     create: {
       fiscalYearId: fiscalYear.id,
-      totalAmount: 1_000_000_000.00,
-      administrativeAmount: 400_000_000.00,
-      youthAmount: 600_000_000.00,
+      totalAmount: 5_000_000.00,
+      administrativeAmount: 3_000_000.00,
+      youthAmount: 2_000_000.00,
     },
   })
 

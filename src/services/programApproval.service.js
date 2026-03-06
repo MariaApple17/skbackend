@@ -1,262 +1,293 @@
 import { db } from "../config/db.config.js"
 
 /* ======================================================
-   APPROVE PROGRAM
+   HELPER: COUNT COUNCIL MEMBERS
 ====================================================== */
 
-export const approveProgramService = async (programId, userId) => {
+const getCouncilMembersCount = async () => {
 
-  programId = Number(programId)
+const total = await db.user.count({
+where:{
+deletedAt:null,
+status:"ACTIVE",
+role:{
+name:{
+in:["SK CHAIRPERSON","SK KAGAWAD"]
+}
+}
+}
+})
 
-  /* ================= CHECK PROGRAM ================= */
-
-  const program = await db.program.findUnique({
-    where: { id: programId }
-  })
-
-  if (!program) {
-    throw new Error("Program not found")
-  }
-
-  if (program.status === "UPCOMING") {
-    throw new Error("Program already approved")
-  }
-
-  if (program.status === "REJECTED") {
-    throw new Error("Program already rejected")
-  }
-
-  /* ================= CHECK USER ================= */
-
-  const user = await db.user.findUnique({
-    where: { id: userId },
-    include: { role: true }
-  })
-
-  if (!user) {
-    throw new Error("User not found")
-  }
-
-  const allowedRoles = ["SK CHAIRPERSON", "SK KAGAWAD"]
-
-  if (!allowedRoles.includes(user.role.name)) {
-    throw new Error("You are not allowed to approve programs")
-  }
-
-  /* ================= PREVENT DOUBLE VOTE ================= */
-
-  const existingVote = await db.programApproval.findFirst({
-    where: {
-      programId,
-      approverId: userId
-    }
-  })
-
-  if (existingVote) {
-    throw new Error("You already voted on this program")
-  }
-
-  /* ================= SAVE APPROVAL ================= */
-
-  await db.programApproval.create({
-    data: {
-      programId,
-      approverId: userId,
-      status: "APPROVED"
-    }
-  })
-
-  /* ================= COUNT APPROVALS ================= */
-
-  const approvals = await db.programApproval.count({
-    where: {
-      programId,
-      status: "APPROVED"
-    }
-  })
-
-  /* ================= COUNT REJECTIONS ================= */
-
-  const rejections = await db.programApproval.count({
-    where: {
-      programId,
-      status: "REJECTED"
-    }
-  })
-
-  /* ================= COUNT OFFICIALS ================= */
-
-  const officials = await db.user.count({
-    where: {
-      deletedAt: null,
-      status: "ACTIVE",
-      role: {
-        name: {
-          in: ["SK CHAIRPERSON", "SK KAGAWAD"]
-        }
-      }
-    }
-  })
-
-  /* ================= COMPUTE MAJORITY ================= */
-
-  const majority = Math.floor(officials / 2) + 1
-
-  let newStatus = program.status
-
-  /* ================= APPROVAL LOGIC ================= */
-
-  if (approvals >= majority) {
-
-    newStatus = "UPCOMING"
-
-    await db.program.update({
-      where: { id: programId },
-      data: { status: newStatus }
-    })
-
-  }
-
-  /* ================= REJECTION LOGIC ================= */
-
-  if (rejections >= majority) {
-
-    newStatus = "REJECTED"
-
-    await db.program.update({
-      where: { id: programId },
-      data: { status: newStatus }
-    })
-
-  }
-
-  return {
-    message: "Approval recorded",
-    approvals,
-    rejections,
-    officials,
-    majority,
-    programStatus: newStatus
-  }
+return total
 
 }
 
+/* ======================================================
+   GET PROGRAMS (WITH PROPOSED BY + APPROVALS)
+====================================================== */
 
+export const getProgramsService = async () => {
+
+const programs = await db.program.findMany({
+
+include:{
+createdBy:{
+select:{
+id:true,
+fullName:true,
+role:{
+select:{ name:true }
+}
+}
+},
+
+approvals:{
+include:{
+approver:{
+select:{
+id:true,
+fullName:true
+}
+}
+},
+orderBy:{
+createdAt:"asc"
+}
+}
+
+},
+
+orderBy:{
+createdAt:"desc"
+}
+
+})
+
+return programs.map(p=>({
+
+id:p.id,
+name:p.name,
+description:p.description,
+
+approvalStatus:p.status,
+
+proposedBy:p.createdBy?.fullName ?? "Unknown",
+
+approvals:p.approvals.map(a=>({
+member:a.approver?.fullName ?? "Unknown",
+userId:a.approver?.id,
+decision:a.status === "APPROVED" ? "approved" : "rejected",
+date:a.createdAt
+}))
+
+}))
+
+}
+
+/* ======================================================
+   APPROVE PROGRAM
+====================================================== */
+
+export const approveProgramService = async (programId,userId)=>{
+
+programId = Number(programId)
+
+/* ================= CHECK PROGRAM ================= */
+
+const program = await db.program.findUnique({
+where:{ id:programId }
+})
+
+if(!program) throw new Error("Program not found")
+
+if(program.status === "UPCOMING")
+throw new Error("Program already approved")
+
+if(program.status === "REJECTED")
+throw new Error("Program already rejected")
+
+/* ================= CHECK USER ================= */
+
+const user = await db.user.findUnique({
+where:{ id:userId },
+include:{ role:true }
+})
+
+if(!user) throw new Error("User not found")
+
+const roleName = user.role?.name
+
+if(!["SK CHAIRPERSON","SK KAGAWAD"].includes(roleName)){
+throw new Error("You are not allowed to vote")
+}
+
+/* ================= PREVENT DOUBLE VOTE ================= */
+
+const existingVote = await db.programApproval.findFirst({
+where:{
+programId,
+approverId:userId
+}
+})
+
+if(existingVote){
+throw new Error("You already voted for this program")
+}
+
+/* ================= SAVE APPROVAL ================= */
+
+await db.programApproval.create({
+data:{
+programId,
+approverId:userId,
+status:"APPROVED"
+}
+})
+
+/* ================= COUNT APPROVALS ================= */
+
+const approvals = await db.programApproval.count({
+where:{
+programId,
+status:"APPROVED"
+}
+})
+
+/* ================= GET COUNCIL MEMBERS ================= */
+
+const totalOfficials = await getCouncilMembersCount()
+
+/* ================= CALCULATE MAJORITY ================= */
+
+const majority = Math.floor(totalOfficials / 2) + 1
+
+let newStatus = program.status
+
+/* ================= UPDATE STATUS IF MAJORITY ================= */
+
+if(approvals >= majority){
+
+newStatus = "UPCOMING"
+
+await db.program.update({
+where:{ id:programId },
+data:{ status:newStatus }
+})
+
+}
+
+/* ================= RETURN RESULT ================= */
+
+return{
+message:"Approval recorded",
+approvals,
+officials:totalOfficials,
+majority,
+programStatus:newStatus
+}
+
+}
 
 /* ======================================================
    REJECT PROGRAM
 ====================================================== */
 
-export const rejectProgramService = async (programId, userId) => {
+export const rejectProgramService = async (programId,userId)=>{
 
-  programId = Number(programId)
+programId = Number(programId)
 
-  /* ================= CHECK PROGRAM ================= */
+/* ================= CHECK PROGRAM ================= */
 
-  const program = await db.program.findUnique({
-    where: { id: programId }
-  })
+const program = await db.program.findUnique({
+where:{ id:programId }
+})
 
-  if (!program) {
-    throw new Error("Program not found")
-  }
+if(!program) throw new Error("Program not found")
 
-  if (program.status === "UPCOMING") {
-    throw new Error("Program already approved")
-  }
+if(program.status === "UPCOMING")
+throw new Error("Program already approved")
 
-  if (program.status === "REJECTED") {
-    throw new Error("Program already rejected")
-  }
+if(program.status === "REJECTED")
+throw new Error("Program already rejected")
 
-  /* ================= CHECK USER ================= */
+/* ================= CHECK USER ================= */
 
-  const user = await db.user.findUnique({
-    where: { id: userId },
-    include: { role: true }
-  })
+const user = await db.user.findUnique({
+where:{ id:userId },
+include:{ role:true }
+})
 
-  if (!user) {
-    throw new Error("User not found")
-  }
+if(!user) throw new Error("User not found")
 
-  const allowedRoles = ["SK CHAIRPERSON", "SK KAGAWAD"]
+const roleName = user.role?.name
 
-  if (!allowedRoles.includes(user.role.name)) {
-    throw new Error("You are not allowed to reject programs")
-  }
+if(!["SK CHAIRPERSON","SK KAGAWAD"].includes(roleName)){
+throw new Error("You are not allowed to vote")
+}
 
-  /* ================= PREVENT DOUBLE VOTE ================= */
+/* ================= PREVENT DOUBLE VOTE ================= */
 
-  const existingVote = await db.programApproval.findFirst({
-    where: {
-      programId,
-      approverId: userId
-    }
-  })
+const existingVote = await db.programApproval.findFirst({
+where:{
+programId,
+approverId:userId
+}
+})
 
-  if (existingVote) {
-    throw new Error("You already voted on this program")
-  }
+if(existingVote){
+throw new Error("You already voted for this program")
+}
 
-  /* ================= SAVE REJECTION ================= */
+/* ================= SAVE REJECTION ================= */
 
-  await db.programApproval.create({
-    data: {
-      programId,
-      approverId: userId,
-      status: "REJECTED"
-    }
-  })
+await db.programApproval.create({
+data:{
+programId,
+approverId:userId,
+status:"REJECTED"
+}
+})
 
-  /* ================= COUNT REJECTIONS ================= */
+/* ================= COUNT REJECTIONS ================= */
 
-  const rejections = await db.programApproval.count({
-    where: {
-      programId,
-      status: "REJECTED"
-    }
-  })
+const rejections = await db.programApproval.count({
+where:{
+programId,
+status:"REJECTED"
+}
+})
 
-  /* ================= COUNT OFFICIALS ================= */
+/* ================= GET COUNCIL MEMBERS ================= */
 
-  const officials = await db.user.count({
-    where: {
-      deletedAt: null,
-      status: "ACTIVE",
-      role: {
-        name: {
-          in: ["SK CHAIRPERSON", "SK KAGAWAD"]
-        }
-      }
-    }
-  })
+const totalOfficials = await getCouncilMembersCount()
 
-  /* ================= COMPUTE MAJORITY ================= */
+/* ================= CALCULATE MAJORITY ================= */
 
-  const majority = Math.floor(officials / 2) + 1
+const majority = Math.floor(totalOfficials / 2) + 1
 
-  let newStatus = program.status
+let newStatus = program.status
 
-  /* ================= FINAL REJECTION ================= */
+/* ================= UPDATE STATUS IF MAJORITY ================= */
 
-  if (rejections >= majority) {
+if(rejections >= majority){
 
-    newStatus = "REJECTED"
+newStatus = "REJECTED"
 
-    await db.program.update({
-      where: { id: programId },
-      data: { status: newStatus }
-    })
+await db.program.update({
+where:{ id:programId },
+data:{ status:newStatus }
+})
 
-  }
+}
 
-  return {
-    message: "Rejection recorded",
-    rejections,
-    officials,
-    majority,
-    programStatus: newStatus
-  }
+/* ================= RETURN RESULT ================= */
+
+return{
+message:"Rejection recorded",
+rejections,
+officials:totalOfficials,
+majority,
+programStatus:newStatus
+}
 
 }

@@ -1,91 +1,120 @@
-import express from 'express';
+import express from "express"
 
 import {
-  addProgramDocuments,
-  createProgram,
-  deleteProgram,
-  getProgramById,
-  getPrograms,
-  toggleProgramStatus,
-  updateProgram,
-  approveProgram,
-  rejectProgram,
-} from '../controllers/program.controller.js';
-import { authMiddleware } from '../middlewares/auth.middleware.js';
-import { uploadProgramImage } from '../middlewares/upload.middleware.js';
+addProgramDocuments,
+createProgram,
+deleteProgram,
+getProgramById,
+getPrograms,
+toggleProgramStatus,
+updateProgram,
+approveProgram,
+rejectProgram
+} from "../controllers/program.controller.js"
 
-const router = express.Router();
+import { authMiddleware } from "../middlewares/auth.middleware.js"
+import { uploadProgramImage } from "../middlewares/upload.middleware.js"
+
+const router = express.Router()
 
 /* ======================================================
-   CREATE PROGRAM (MULTIPLE DOCUMENT IMAGES)
+   CREATE PROGRAM (WITH DOCUMENT IMAGES)
 ====================================================== */
+
 router.post(
-  '/',
-  authMiddleware,
-  uploadProgramImage.array('documents', 10), // ✅ multiple images
-  createProgram
-);
+"/",
+authMiddleware,
+uploadProgramImage.array("documents",10),
+createProgram
+)
+
 
 /* ======================================================
-   GET ALL
+   GET ALL PROGRAMS
 ====================================================== */
-router.get('/', authMiddleware, getPrograms);
+
+router.get(
+"/",
+authMiddleware,
+getPrograms
+)
+
 
 /* ======================================================
-   GET BY ID
+   GET PROGRAM BY ID
 ====================================================== */
-router.get('/:id', authMiddleware, getProgramById);
+
+router.get(
+"/:id",
+authMiddleware,
+getProgramById
+)
+
 
 /* ======================================================
-   UPDATE PROGRAM (NO IMAGE UPLOAD HERE)
+   UPDATE PROGRAM
 ====================================================== */
+
 router.put(
-  '/:id',
-  authMiddleware,
-  updateProgram
-);
+"/:id",
+authMiddleware,
+updateProgram
+)
+
 
 /* ======================================================
-   ADD PROGRAM DOCUMENT IMAGES (SEPARATE ENDPOINT)
+   ADD PROGRAM DOCUMENTS
 ====================================================== */
+
 router.post(
-  '/:id/documents',
-  authMiddleware,
-  uploadProgramImage.array('documents', 10),
-  addProgramDocuments
-);
-
-/* ======================================================
-   TOGGLE STATUS
-====================================================== */
-router.patch(
-  '/toggle-status/:id',
-  authMiddleware,
-  toggleProgramStatus
-);
-/* ======================================================
-   APPROVE PROGRAM
-====================================================== */
-
-router.patch(
-  "/:id/approve",
-  authMiddleware,
-  approveProgram
+"/:id/documents",
+authMiddleware,
+uploadProgramImage.array("documents",10),
+addProgramDocuments
 )
 
+
 /* ======================================================
-   REJECT PROGRAM
+   TOGGLE ACTIVE STATUS
 ====================================================== */
 
 router.patch(
-  "/:id/reject",
-  authMiddleware,
-  rejectProgram
+"/:id/toggle-status",
+authMiddleware,
+toggleProgramStatus
 )
 
-/* ======================================================
-   DELETE (SOFT)
-====================================================== */
-router.delete('/:id', authMiddleware, deleteProgram);
 
-export default router;
+/* ======================================================
+   APPROVE PROGRAM (COUNCIL VOTE)
+====================================================== */
+
+router.patch(
+"/:id/approve",
+authMiddleware,
+approveProgram
+)
+
+
+/* ======================================================
+   REJECT PROGRAM (COUNCIL VOTE)
+====================================================== */
+
+router.patch(
+"/:id/reject",
+authMiddleware,
+rejectProgram
+)
+
+
+/* ======================================================
+   DELETE PROGRAM (SOFT DELETE)
+====================================================== */
+
+router.delete(
+"/:id",
+authMiddleware,
+deleteProgram
+)
+
+export default router

@@ -1,49 +1,48 @@
-import * as ProgramService from '../services/program.service.js'
-import { uploadToCloudinary } from '../utils/cloudinaryUpload.js'
+import * as ProgramService from "../services/program.service.js"
+import { uploadToCloudinary } from "../utils/cloudinaryUpload.js"
+
 
 /* ======================================================
    CREATE PROGRAM
 ====================================================== */
 
-export const createProgram = async (req,res) => {
+export const createProgram = async (req, res) => {
 
-  try{
+  try {
 
     const documents = []
 
-    if(req.files && Array.isArray(req.files)){
+    if (req.files && Array.isArray(req.files)) {
 
-      for(const file of req.files){
+      for (const file of req.files) {
 
         const imageUrl = await uploadToCloudinary(
           file,
           process.env.CLOUDINARY_PROGRAMS_FOLDER,
-          'image'
+          "image"
         )
 
         documents.push({
           imageUrl,
-          title:file.originalname,
-          uploadedBy:req.user?.fullName ?? null
+          title: file.originalname,
+          uploadedBy: req.user?.fullName ?? null
         })
-
       }
-
     }
 
     const program = await ProgramService.createProgramService({
 
-      code:req.body.code,
-      name:req.body.name,
-      description:req.body.description,
-      committeeInCharge:req.body.committeeInCharge,
-      beneficiaries:req.body.beneficiaries,
-      startDate:req.body.startDate,
-      endDate:req.body.endDate,
+      code: req.body.code,
+      name: req.body.name,
+      description: req.body.description,
+      committeeInCharge: req.body.committeeInCharge,
+      beneficiaries: req.body.beneficiaries,
+      startDate: req.body.startDate,
+      endDate: req.body.endDate,
 
       isActive:
         req.body.isActive !== undefined
-          ? req.body.isActive === 'true'
+          ? req.body.isActive === "true"
           : true,
 
       documents
@@ -51,15 +50,15 @@ export const createProgram = async (req,res) => {
     })
 
     return res.status(201).json({
-      success:true,
-      data:program
+      success: true,
+      data: program
     })
 
-  }catch(error){
+  } catch (error) {
 
     return res.status(400).json({
-      success:false,
-      message:error.message
+      success: false,
+      message: error.message
     })
 
   }
@@ -71,23 +70,23 @@ export const createProgram = async (req,res) => {
    GET ALL PROGRAMS
 ====================================================== */
 
-export const getPrograms = async (req,res)=>{
+export const getPrograms = async (req, res) => {
 
-  try{
+  try {
 
     const result =
       await ProgramService.getAllProgramsService(req.query)
 
     return res.status(200).json({
-      success:true,
+      success: true,
       ...result
     })
 
-  }catch(error){
+  } catch (error) {
 
     return res.status(500).json({
-      success:false,
-      message:error.message
+      success: false,
+      message: error.message
     })
 
   }
@@ -99,23 +98,23 @@ export const getPrograms = async (req,res)=>{
    GET PROGRAM BY ID
 ====================================================== */
 
-export const getProgramById = async (req,res)=>{
+export const getProgramById = async (req, res) => {
 
-  try{
+  try {
 
     const program =
       await ProgramService.getProgramByIdService(req.params.id)
 
     return res.status(200).json({
-      success:true,
-      data:program
+      success: true,
+      data: program
     })
 
-  }catch(error){
+  } catch (error) {
 
     return res.status(404).json({
-      success:false,
-      message:error.message
+      success: false,
+      message: error.message
     })
 
   }
@@ -127,135 +126,155 @@ export const getProgramById = async (req,res)=>{
    APPROVE PROGRAM (COUNCIL VOTE)
 ====================================================== */
 
-export const approveProgram = async (req,res)=>{
+export const approveProgram = async (req, res) => {
 
-  try{
+try {
 
-    const result =
-      await ProgramService.approveProgramService(
-        req.params.id,
-        req.user.id
-      )
+if(!req.user || !req.user.id){
+return res.status(401).json({
+success:false,
+message:"Unauthorized user"
+})
+}
 
-    return res.status(200).json({
-      success:true,
-      ...result
-    })
+const programId = Number(req.params.id)
+const userId = Number(req.user.id)
 
-  }catch(error){
+const result = await ProgramService.approveProgramService(
+programId,
+userId
+)
 
-    return res.status(400).json({
-      success:false,
-      message:error.message
-    })
+return res.status(200).json({
+success:true,
+...result
+})
 
-  }
+}catch(error){
+
+console.error("Approve Program Error:", error)
+
+return res.status(400).json({
+success:false,
+message:error.message || "Failed to approve program"
+})
 
 }
 
-
+}
 /* ======================================================
    REJECT PROGRAM (COUNCIL VOTE)
 ====================================================== */
+export const rejectProgram = async (req, res) => {
 
-export const rejectProgram = async (req,res)=>{
+try {
 
-  try{
+if(!req.user || !req.user.id){
+return res.status(401).json({
+success:false,
+message:"Unauthorized user"
+})
+}
 
-    const result =
-      await ProgramService.rejectProgramService(
-        req.params.id,
-        req.user.id
-      )
+const programId = Number(req.params.id)
+const userId = Number(req.user.id)
 
-    return res.status(200).json({
-      success:true,
-      ...result
-    })
+const result = await ProgramService.rejectProgramService(
+programId,
+userId
+)
 
-  }catch(error){
+return res.status(200).json({
+success:true,
+...result
+})
 
-    return res.status(400).json({
-      success:false,
-      message:error.message
-    })
+}catch(error){
 
-  }
+console.error("Reject Program Error:", error)
+
+return res.status(400).json({
+success:false,
+message:error.message || "Failed to reject program"
+})
 
 }
 
+}
 
 /* ======================================================
    UPDATE PROGRAM
 ====================================================== */
 
-export const updateProgram = async (req,res)=>{
+export const updateProgram = async (req, res) => {
 
-  try{
+  try {
 
     const data = {}
 
-    const parseBoolean = value=>{
-      if(value === true || value === 'true') return true
-      if(value === false || value === 'false') return false
+    const parseBoolean = (value) => {
+
+      if (value === true || value === "true") return true
+      if (value === false || value === "false") return false
       return undefined
+
     }
 
-    const parseDate = value=>{
+    const parseDate = (value) => {
 
-      if(value === undefined) return undefined
-      if(value === null || value === '') return null
+      if (value === undefined) return undefined
+      if (value === null || value === "") return null
 
       const d = new Date(value)
 
-      if(Number.isNaN(d.getTime())){
+      if (Number.isNaN(d.getTime())) {
         throw new Error(`Invalid date format: ${value}`)
       }
 
       return d
+
     }
 
-    if(typeof req.body.code === 'string')
+    if (typeof req.body.code === "string")
       data.code = req.body.code
 
-    if(typeof req.body.name === 'string')
+    if (typeof req.body.name === "string")
       data.name = req.body.name
 
-    if(typeof req.body.description === 'string')
+    if (typeof req.body.description === "string")
       data.description = req.body.description
 
-    if(typeof req.body.committeeInCharge === 'string')
+    if (typeof req.body.committeeInCharge === "string")
       data.committeeInCharge = req.body.committeeInCharge
 
-    if(typeof req.body.beneficiaries === 'string')
+    if (typeof req.body.beneficiaries === "string")
       data.beneficiaries = req.body.beneficiaries
 
 
     const isActive = parseBoolean(req.body.isActive)
 
-    if(isActive !== undefined)
+    if (isActive !== undefined)
       data.isActive = isActive
 
 
     const startDate = parseDate(req.body.startDate)
-    if(startDate !== undefined)
+    if (startDate !== undefined)
       data.startDate = startDate
 
 
     const endDate = parseDate(req.body.endDate)
-    if(endDate !== undefined)
+    if (endDate !== undefined)
       data.endDate = endDate
 
 
-    if(data.startDate && data.endDate && data.startDate > data.endDate){
+    if (data.startDate && data.endDate && data.startDate > data.endDate) {
 
       return res.status(400).json({
-        success:false,
-        message:'Start date cannot be after end date'
+        success: false,
+        message: "Start date cannot be after end date"
       })
 
     }
-
 
     const program =
       await ProgramService.updateProgramService(
@@ -264,15 +283,15 @@ export const updateProgram = async (req,res)=>{
       )
 
     return res.status(200).json({
-      success:true,
-      data:program
+      success: true,
+      data: program
     })
 
-  }catch(error){
+  } catch (error) {
 
     return res.status(400).json({
-      success:false,
-      message:error.message
+      success: false,
+      message: error.message
     })
 
   }
@@ -284,33 +303,33 @@ export const updateProgram = async (req,res)=>{
    ADD PROGRAM DOCUMENTS
 ====================================================== */
 
-export const addProgramDocuments = async (req,res)=>{
+export const addProgramDocuments = async (req, res) => {
 
-  try{
+  try {
 
-    if(!req.files || req.files.length === 0){
+    if (!req.files || req.files.length === 0) {
 
       return res.status(400).json({
-        success:false,
-        message:'No files uploaded'
+        success: false,
+        message: "No files uploaded"
       })
 
     }
 
     const documents = []
 
-    for(const file of req.files){
+    for (const file of req.files) {
 
       const imageUrl = await uploadToCloudinary(
         file,
         process.env.CLOUDINARY_PROGRAMS_FOLDER,
-        'image'
+        "image"
       )
 
       documents.push({
         imageUrl,
-        title:file.originalname,
-        uploadedBy:req.user?.fullName ?? null
+        title: file.originalname,
+        uploadedBy: req.user?.fullName ?? null
       })
 
     }
@@ -322,15 +341,15 @@ export const addProgramDocuments = async (req,res)=>{
       )
 
     return res.status(200).json({
-      success:true,
-      data:program
+      success: true,
+      data: program
     })
 
-  }catch(error){
+  } catch (error) {
 
     return res.status(400).json({
-      success:false,
-      message:error.message
+      success: false,
+      message: error.message
     })
 
   }
@@ -342,9 +361,9 @@ export const addProgramDocuments = async (req,res)=>{
    TOGGLE ACTIVE STATUS
 ====================================================== */
 
-export const toggleProgramStatus = async (req,res)=>{
+export const toggleProgramStatus = async (req, res) => {
 
-  try{
+  try {
 
     const program =
       await ProgramService.toggleProgramStatusService(
@@ -352,15 +371,15 @@ export const toggleProgramStatus = async (req,res)=>{
       )
 
     return res.status(200).json({
-      success:true,
-      data:program
+      success: true,
+      data: program
     })
 
-  }catch(error){
+  } catch (error) {
 
     return res.status(400).json({
-      success:false,
-      message:error.message
+      success: false,
+      message: error.message
     })
 
   }
@@ -372,22 +391,22 @@ export const toggleProgramStatus = async (req,res)=>{
    DELETE PROGRAM
 ====================================================== */
 
-export const deleteProgram = async (req,res)=>{
+export const deleteProgram = async (req, res) => {
 
-  try{
+  try {
 
     await ProgramService.deleteProgramService(req.params.id)
 
     return res.status(200).json({
-      success:true,
-      message:'Program deleted successfully'
+      success: true,
+      message: "Program deleted successfully"
     })
 
-  }catch(error){
+  } catch (error) {
 
     return res.status(400).json({
-      success:false,
-      message:error.message
+      success: false,
+      message: error.message
     })
 
   }
