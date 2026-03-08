@@ -1,94 +1,123 @@
-import { db } from '../config/db.config.js';
+import { db } from '../config/db.config.js'
 
 const isNonEmptyString = (val) =>
-  typeof val === 'string' && val.trim().length > 0;
+  typeof val === 'string' && val.trim().length > 0
 
 /* ======================================================
    GET SYSTEM PROFILE (GLOBAL)
 ====================================================== */
 export const getSystemProfile = async () => {
-  let profile = await db.systemProfile.findFirst();
 
-  // Auto-create default profile if none exists
-  if (!profile) {
+  let profile = await db.systemProfile.findFirst({
+    include:{
+      FiscalYear:true
+    }
+  })
+
+  /* AUTO CREATE DEFAULT PROFILE */
+  if(!profile){
+
+    const currentYear = new Date().getFullYear()
+
     profile = await db.systemProfile.create({
-      data: {
-        systemName: 'SK360',
-        systemDescription:
-          'Project, Budget, and Report Monitoring System',
-        location: '',
-        logoUrl: '',
+      data:{
+        systemName:'SK360',
+        systemDescription:'Project, Budget, and Report Monitoring System',
+        location:'',
+        logoUrl:'',
+
+        /* REQUIRED RELATION FIX */
+        FiscalYear:{
+          create:{
+            year:currentYear,
+            isActive:true
+          }
+        }
       },
-    });
+      include:{
+        FiscalYear:true
+      }
+    })
   }
 
-  return profile;
-};
+  return profile
+}
+
 
 /* ======================================================
    UPDATE SYSTEM PROFILE (GLOBAL)
 ====================================================== */
 export const updateSystemProfile = async (payload) => {
-  const profile = await db.systemProfile.findFirst();
 
-  if (!profile) {
-    throw {
-      statusCode: 404,
-      message: 'System profile not found',
-    };
+  const profile = await db.systemProfile.findFirst()
+
+  if(!profile){
+    throw{
+      statusCode:404,
+      message:'System profile not found'
+    }
   }
 
   /* ================= VALIDATION ================= */
 
-  if (
+  if(
     payload.systemName !== undefined &&
     !isNonEmptyString(payload.systemName)
-  ) {
-    throw {
-      statusCode: 400,
-      message: 'System name must be a non-empty string',
-    };
+  ){
+    throw{
+      statusCode:400,
+      message:'System name must be a non-empty string'
+    }
   }
 
-  if (
+  if(
     payload.systemDescription !== undefined &&
     typeof payload.systemDescription !== 'string'
-  ) {
-    throw {
-      statusCode: 400,
-      message: 'System description must be a string',
-    };
+  ){
+    throw{
+      statusCode:400,
+      message:'System description must be a string'
+    }
   }
 
-  if (
+  if(
     payload.location !== undefined &&
     typeof payload.location !== 'string'
-  ) {
-    throw {
-      statusCode: 400,
-      message: 'Location must be a string',
-    };
+  ){
+    throw{
+      statusCode:400,
+      message:'Location must be a string'
+    }
   }
 
-  if (
+  if(
     payload.logoUrl !== undefined &&
     typeof payload.logoUrl !== 'string'
-  ) {
-    throw {
-      statusCode: 400,
-      message: 'Logo URL must be a string',
-    };
+  ){
+    throw{
+      statusCode:400,
+      message:'Logo URL must be a string'
+    }
   }
 
-  if (Object.keys(payload).length === 0) {
-    throw {
-      statusCode: 400,
-      message: 'No valid fields provided for update',
-    };
+  if(Object.keys(payload).length === 0){
+    throw{
+      statusCode:400,
+      message:'No valid fields provided for update'
+    }
   }
 
-  return db.systemProfile.update({
-    where: { id: profile.id },
-    data: payload,
-  });
-};
+  /* ================= UPDATE ================= */
+
+  const updated = await db.systemProfile.update({
+    where:{ id:profile.id },
+    data:{
+      systemName:payload.systemName,
+      systemDescription:payload.systemDescription,
+      location:payload.location,
+      logoUrl:payload.logoUrl
+    }
+  })
+
+  return updated
+}

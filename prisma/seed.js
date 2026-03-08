@@ -1,24 +1,21 @@
-import bcrypt from 'bcrypt';
-
-import {
-  BudgetCategory,
-  PrismaClient,
-  UserStatus,
-} from '@prisma/client';
-
-import { PERMISSIONS } from '../src/constants/permission.constant.js';
+import bcrypt from 'bcrypt'
+import { PrismaClient, UserStatus, BudgetCategory } from '@prisma/client'
+import { PERMISSIONS } from '../src/constants/permission.constant.js'
 
 const prisma = new PrismaClient()
 
 async function main() {
+
   console.log('🌱 Seeding system data...')
 
   /* =====================================================
-   * 1. PERMISSIONS
-   * ===================================================== */
+   1. PERMISSIONS
+  ===================================================== */
+
   const permissions = []
 
   for (const perm of PERMISSIONS) {
+
     const permission = await prisma.permission.upsert({
       where: { key: perm.key },
       update: {
@@ -33,11 +30,13 @@ async function main() {
     })
 
     permissions.push(permission)
+
   }
 
   /* =====================================================
-   * 2. SUPER ADMIN ROLE
-   * ===================================================== */
+   2. SUPER ADMIN ROLE
+  ===================================================== */
+
   const superAdminRole = await prisma.role.upsert({
     where: { name: 'SUPER_ADMIN' },
     update: {
@@ -50,9 +49,11 @@ async function main() {
   })
 
   /* =====================================================
-   * 3. ROLE ⇄ PERMISSIONS
-   * ===================================================== */
+   3. ROLE PERMISSIONS
+  ===================================================== */
+
   for (const permission of permissions) {
+
     await prisma.rolePermission.upsert({
       where: {
         roleId_permissionId: {
@@ -66,11 +67,13 @@ async function main() {
         permissionId: permission.id,
       },
     })
+
   }
 
   /* =====================================================
-   * 4. ADMIN USER
-   * ===================================================== */
+   4. ADMIN USER
+  ===================================================== */
+
   const passwordHash = await bcrypt.hash('Admin@12345', 10)
 
   await prisma.user.upsert({
@@ -89,8 +92,9 @@ async function main() {
   })
 
   /* =====================================================
-   * 5. FISCAL YEAR (ONLY ONE ACTIVE)
-   * ===================================================== */
+   5. FISCAL YEAR
+  ===================================================== */
+
   await prisma.fiscalYear.updateMany({
     data: { isActive: false },
   })
@@ -107,28 +111,9 @@ async function main() {
   })
 
   /* =====================================================
-   * 6. BUDGET (TOTAL AMOUNT PER FY)
-   * ===================================================== */
-  const budget = await prisma.budget.upsert({
-    where: {
-      fiscalYearId: fiscalYear.id, // requires @unique
-    },
-    update: {
-      totalAmount: 5_000_000.00,
-      administrativeAmount: 3_000_000.00,
-      youthAmount: 2_000_000.00,
-    },
-    create: {
-      fiscalYearId: fiscalYear.id,
-      totalAmount: 5_000_000.00,
-      administrativeAmount: 3_000_000.00,
-      youthAmount: 2_000_000.00,
-    },
-  })
+   6. BUDGET CLASSIFICATIONS
+  ===================================================== */
 
-  /* =====================================================
-   * 7. CLASSIFICATIONS (CATEGORY-AWARE)
-   * ===================================================== */
   const mooe = await prisma.budgetClassification.upsert({
     where: { code: 'MOOE' },
     update: {
@@ -155,154 +140,43 @@ async function main() {
     update: {
       name: 'Personal Services',
       description: 'Compensation and personnel costs',
-      allowedCategories: [BudgetCategory.ADMINISTRATIVE],
+      allowedCategories: [
+        BudgetCategory.ADMINISTRATIVE,
+      ],
     },
     create: {
       code: 'PS',
       name: 'Personal Services',
       description: 'Compensation and personnel costs',
-      allowedCategories: [BudgetCategory.ADMINISTRATIVE],
+      allowedCategories: [
+        BudgetCategory.ADMINISTRATIVE,
+      ],
     },
   })
 
   /* =====================================================
-   * /* =====================================================
- * 8. OBJECTS OF EXPENDITURE
- * ===================================================== */
-const officeSupplies = await prisma.objectOfExpenditure.upsert({
-  where: { code: 'OOE-001' },
-  update: {
-    name: 'Office Supplies',
-    description: 'Expenses for office materials',
-    classificationId: mooe.id,
-  },
-  create: {
-    code: 'OOE-001',
-    name: 'Office Supplies',
-    description: 'Expenses for office materials',
-    classification: {
-      connect: { id: mooe.id },
-    },
-  },
-})
+   7. OBJECTS OF EXPENDITURE
+  ===================================================== */
 
-  /* =====================================================
- * 9. SAMPLE PROGRAM
- * ===================================================== */
-const youthProgram = await prisma.program.upsert({
-  where: { code: 'PRG-001' },
-  update: {
-    name: 'Youth Development Program',
-    description: 'Skills and training activities for youth',
-    committeeInCharge: 'Education Committee',
-    beneficiaries: 'Youth constituents',
-    startDate: new Date('2025-01-01'),
-    endDate: new Date('2025-12-31'),
-    isActive: true,
-    fiscalYearId: fiscalYear.id, // ✅ FIX HERE
-  },
-  create: {
-    code: 'PRG-001',
-    name: 'Youth Development Program',
-    description: 'Skills and training activities for youth',
-    committeeInCharge: 'Education Committee',
-    beneficiaries: 'Youth constituents',
-    startDate: new Date('2025-01-01'),
-    endDate: new Date('2025-12-31'),
-    isActive: true,
-    fiscalYearId: fiscalYear.id, // ✅ FIX HERE
-  },
-})
-
-  /* =====================================================
-   * 10. CLASSIFICATION LIMITS BY CATEGORY
-   * ===================================================== */
-  await prisma.budgetClassificationLimit.upsert({
-    where: {
-      budgetId_classificationId_category: {
-        budgetId: budget.id,
-        classificationId: mooe.id,
-        category: BudgetCategory.ADMINISTRATIVE,
-      },
-    },
-    update: { limitAmount: 300_000_000.00 },
-    create: {
-      budgetId: budget.id,
+  await prisma.objectOfExpenditure.upsert({
+    where: { code: 'OOE-001' },
+    update: {
+      name: 'Office Supplies',
+      description: 'Expenses for office materials',
       classificationId: mooe.id,
-      category: BudgetCategory.ADMINISTRATIVE,
-      limitAmount: 300_000_000.00,
     },
-  })
-
-  await prisma.budgetClassificationLimit.upsert({
-    where: {
-      budgetId_classificationId_category: {
-        budgetId: budget.id,
-        classificationId: mooe.id,
-        category: BudgetCategory.YOUTH,
-      },
-    },
-    update: { limitAmount: 600_000_000.00 },
     create: {
-      budgetId: budget.id,
-      classificationId: mooe.id,
-      category: BudgetCategory.YOUTH,
-      limitAmount: 600_000_000.00,
+      code: 'OOE-001',
+      name: 'Office Supplies',
+      description: 'Expenses for office materials',
+      classification: {
+        connect: { id: mooe.id },
+      },
     },
   })
 
-  await prisma.budgetClassificationLimit.upsert({
-    where: {
-      budgetId_classificationId_category: {
-        budgetId: budget.id,
-        classificationId: ps.id,
-        category: BudgetCategory.ADMINISTRATIVE,
-      },
-    },
-    update: { limitAmount: 100_000_000.00 },
-    create: {
-      budgetId: budget.id,
-      classificationId: ps.id,
-      category: BudgetCategory.ADMINISTRATIVE,
-      limitAmount: 100_000_000.00,
-    },
-  })
+  console.log('✅ Seed completed successfully')
 
-  /* =====================================================
-   * 11. SAMPLE ALLOCATION
-   * ===================================================== */
-  const existingAllocation = await prisma.budgetAllocation.findFirst({
-    where: {
-      budgetId: budget.id,
-      programId: youthProgram.id,
-      classificationId: mooe.id,
-      category: BudgetCategory.YOUTH,
-      objectOfExpenditureId: officeSupplies.id,
-      deletedAt: null,
-    },
-  })
-
-  if (existingAllocation) {
-    await prisma.budgetAllocation.update({
-      where: { id: existingAllocation.id },
-      data: {
-        allocatedAmount: 50_000_000.00,
-      },
-    })
-  } else {
-    await prisma.budgetAllocation.create({
-      data: {
-        budgetId: budget.id,
-        programId: youthProgram.id,
-        classificationId: mooe.id,
-        category: BudgetCategory.YOUTH,
-        objectOfExpenditureId: officeSupplies.id,
-        allocatedAmount: 50_000_000.00,
-      },
-    })
-  }
-
-  console.log('✅ All tables seeded & connected successfully')
 }
 
 main()

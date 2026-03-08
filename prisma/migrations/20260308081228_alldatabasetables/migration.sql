@@ -11,13 +11,16 @@ CREATE TYPE "ApprovalStatus" AS ENUM ('PENDING', 'APPROVED', 'REJECTED');
 CREATE TYPE "LogLevel" AS ENUM ('INFO', 'WARNING', 'ERROR');
 
 -- CreateEnum
-CREATE TYPE "PermissionModule" AS ENUM ('DASHBOARD', 'BUDGET_PREPARATION', 'PROCUREMENT', 'DATA_SETUP', 'PROGRAMS_MANAGEMENT', 'USER_MANAGEMENT', 'ROLES_PERMISSION', 'REPORTS_PERMISSION');
+CREATE TYPE "PermissionModule" AS ENUM ('DASHBOARD', 'BUDGET_PREPARATION', 'PROCUREMENT', 'DATA_SETUP', 'PROGRAMS_MANAGEMENT', 'USER_MANAGEMENT', 'ROLES_PERMISSION', 'REPORTS_PERMISSION', 'SK_PLANTILLA');
 
 -- CreateEnum
 CREATE TYPE "Gender" AS ENUM ('MALE', 'FEMALE', 'OTHER');
 
 -- CreateEnum
 CREATE TYPE "BudgetCategory" AS ENUM ('ADMINISTRATIVE', 'YOUTH');
+
+-- CreateEnum
+CREATE TYPE "ProgramStatus" AS ENUM ('DRAFT', 'SUBMITTED', 'APPROVED', 'REJECTED');
 
 -- CreateTable
 CREATE TABLE "SystemProfile" (
@@ -118,6 +121,7 @@ CREATE TABLE "Program" (
     "updatedAt" TIMESTAMP(3) NOT NULL,
     "deletedAt" TIMESTAMP(3),
     "fiscalYearId" INTEGER,
+    "status" "ProgramStatus" NOT NULL DEFAULT 'DRAFT',
 
     CONSTRAINT "Program_pkey" PRIMARY KEY ("id")
 );
@@ -302,6 +306,7 @@ CREATE TABLE "Plantilla" (
     "remarks" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
+    "fiscalYearId" INTEGER,
 
     CONSTRAINT "Plantilla_pkey" PRIMARY KEY ("id")
 );
@@ -317,6 +322,18 @@ CREATE TABLE "SystemLog" (
     "deletedAt" TIMESTAMP(3),
 
     CONSTRAINT "SystemLog_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ProgramApproval" (
+    "id" SERIAL NOT NULL,
+    "programId" INTEGER NOT NULL,
+    "approverId" INTEGER NOT NULL,
+    "status" "ApprovalStatus" NOT NULL DEFAULT 'PENDING',
+    "remarks" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "ProgramApproval_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateIndex
@@ -431,10 +448,19 @@ ALTER TABLE "Approval" ADD CONSTRAINT "Approval_approverId_fkey" FOREIGN KEY ("a
 ALTER TABLE "Approval" ADD CONSTRAINT "Approval_requestId_fkey" FOREIGN KEY ("requestId") REFERENCES "ProcurementRequest"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Plantilla" ADD CONSTRAINT "Plantilla_officialId_fkey" FOREIGN KEY ("officialId") REFERENCES "SkOfficial"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
 ALTER TABLE "Plantilla" ADD CONSTRAINT "Plantilla_budgetAllocationId_fkey" FOREIGN KEY ("budgetAllocationId") REFERENCES "BudgetAllocation"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "Plantilla" ADD CONSTRAINT "Plantilla_fiscalYearId_fkey" FOREIGN KEY ("fiscalYearId") REFERENCES "FiscalYear"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Plantilla" ADD CONSTRAINT "Plantilla_officialId_fkey" FOREIGN KEY ("officialId") REFERENCES "SkOfficial"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "SystemLog" ADD CONSTRAINT "SystemLog_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ProgramApproval" ADD CONSTRAINT "ProgramApproval_approverId_fkey" FOREIGN KEY ("approverId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ProgramApproval" ADD CONSTRAINT "ProgramApproval_programId_fkey" FOREIGN KEY ("programId") REFERENCES "Program"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
