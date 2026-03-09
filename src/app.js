@@ -25,7 +25,15 @@ import skPlantillaRoutes from './routes/sk-plantilla.route.js';
 const app = express();
 
 /* ================= MIDDLEWARES ================= */
-app.use(cors());
+app.use(
+  cors({
+    origin: [
+      "http://localhost:3000",
+      "https://skfrontend-six.vercel.app"
+    ],
+    credentials: true
+  })
+);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan("dev"));
@@ -39,6 +47,7 @@ app.use("/api/permissions", permissionRoutes);
 /* ================= BUDGET & DATA SETUP ================= */
 app.use("/api/fiscal-years", fiscalYearRoutes);
 app.use("/api/budgets", budgetRoutes);
+app.use("/api/budget", budgetRoutes);
 app.use("/api/budget-allocations", budgetAllocationRoutes);
 
 app.use("/api/programs", programRoutes);
