@@ -104,15 +104,39 @@ export const createBudgetAllocation = async (payload) => {
 
   /* ---------------- FK VALIDATION ---------------- */
   await assertExists(db.budget, { id: budgetId, deletedAt: null }, 'Budget');
+/* ---------------- PROGRAM VALIDATION ---------------- */
 
-  // ✅ Validate program only if YOUTH
-  if (category === 'YOUTH') {
-    await assertExists(
-      db.program,
-      { id: programId, deletedAt: null },
-      'Program'
+if (category === 'YOUTH') {
+
+  const program = await assertExists(
+    db.program,
+    { id: programId, deletedAt: null },
+    'Program'
+  );
+
+  const today = new Date();
+  today.setHours(0,0,0,0);
+
+  const startDate = program.startDate
+    ? new Date(program.startDate)
+    : null;
+
+  if (!startDate) {
+    throw new Error(
+      'Program must have a start date before allocating budget.'
     );
   }
+
+  startDate.setHours(0,0,0,0);
+
+  /* ❌ BLOCK ONGOING OR COMPLETED PROGRAM */
+  if (today >= startDate) {
+    throw new Error(
+      'Budget allocation is only allowed for UPCOMING programs.'
+    );
+  }
+
+}
 
   await assertExists(
     db.budgetClassification,

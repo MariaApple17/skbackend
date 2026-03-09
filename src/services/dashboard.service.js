@@ -115,21 +115,32 @@ export const getDashboardData = async ({
     });
 
     const totals = yearlyStats.reduce(
-      (acc, y) => {
-        acc.total += y.total;
-        acc.allocated += y.allocated;
-        acc.used += y.used;
-        acc.remaining += y.remaining;
-        return acc;
-      },
-      { total: 0, allocated: 0, used: 0, remaining: 0 }
-    );
+  (acc, y) => {
+    acc.total += y.total;
+    acc.allocated += y.allocated;
+    acc.used += y.used;
+    acc.remaining += y.remaining;
+    return acc;
+  },
+  { total: 0, allocated: 0, used: 0, remaining: 0 }
+);
 
-    return {
-      mode: 'ALL',
-      totals,
-      yearly: yearlyStats,
-    };
+/* ================= USERS ================= */
+
+const totalUsers = await db.user.count({
+  where: { deletedAt: null }
+});
+
+return {
+  mode: 'ALL',
+  totals: {
+    ...totals,
+    users: {
+      total: totalUsers
+    }
+  },
+  yearly: yearlyStats,
+};
   }
 
   /* ============================================================

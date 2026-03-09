@@ -93,6 +93,45 @@ export const createProgramService = async (data) => {
 }
 
 /* ======================================================
+   UPLOAD PROGRAM PROOF (NEW)
+====================================================== */
+
+export const uploadProgramProofService = async (programId,fileUrl,userName)=>{
+
+  const program = await db.program.findUnique({
+    where:{ id:Number(programId) }
+  })
+
+  if(!program){
+    throw new Error("Program not found")
+  }
+
+  const proof = await db.programDocumentImage.create({
+
+    data:{
+      programId:Number(programId),
+      imageUrl:fileUrl,
+      uploadedBy:userName ?? "SK Official"
+    }
+
+  })
+
+  const now = new Date()
+
+  if(program.endDate && now > program.endDate){
+
+    await db.program.update({
+      where:{ id:Number(programId) },
+      data:{ status:"COMPLETED" }
+    })
+
+  }
+
+  return proof
+
+}
+
+/* ======================================================
    GET ALL PROGRAMS
 ====================================================== */
 

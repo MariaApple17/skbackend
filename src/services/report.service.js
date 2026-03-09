@@ -258,57 +258,62 @@ export async function getProgramUtilization({
     limit,
   };
 }
-/* ===============================
-   ACCOMPLISHMENT REPORT
-   ONE ROW PER PROGRAM
-   Active Fiscal Year ONLY
-================================ */
 export async function getAccomplishmentReport({
   search,
   page = 1,
   limit = 10,
 } = {}) {
+
   const activeFY = await getActiveFiscalYear();
 
   if (!activeFY) {
     return { data: [], total: 0, page, limit };
   }
-const programs = await prisma.program.findMany({
-  where: {
-    deletedAt: null,
-    fiscalYearId: activeFY.id, // 🔥 FIX
-    ...(search && {
-      name: {
-        contains: search,
-        mode: 'insensitive',
+
+  const programs = await prisma.program.findMany({
+    where: {
+      deletedAt: null,
+      fiscalYearId: activeFY.id,
+
+      // 🔥 ONLY COMPLETED PROGRAMS
+      endDate: {
+        lt: new Date(),
       },
-    }),
-  },
-  include: {
-    allocations: {
-      where: {
-        budget: {
-          fiscalYearId: activeFY.id,
+
+      ...(search && {
+        name: {
+          contains: search,
+          mode: 'insensitive',
         },
-      },
-      include: {
-        requests: {
-          where: {
-            deletedAt: null,
-            status: {
-              in: ['APPROVED', 'PURCHASED', 'COMPLETED'],
-            },
+      }),
+    },
+
+    include: {
+      allocations: {
+        where: {
+          budget: {
+            fiscalYearId: activeFY.id,
           },
-          select: {
-            amount: true,
+        },
+        include: {
+          requests: {
+            where: {
+              deletedAt: null,
+              status: {
+                in: ['APPROVED', 'PURCHASED', 'COMPLETED'],
+              },
+            },
+            select: {
+              amount: true,
+            },
           },
         },
       },
     },
-  },
-});
+  });
 
   const computed = programs.map(program => {
+
     const totalAllocated = program.allocations.reduce(
       (sum, allocation) =>
         sum + Number(allocation.allocatedAmount),
@@ -340,7 +345,6 @@ const programs = await prisma.program.findMany({
     };
   });
 
-  // 🔥 Manual pagination (because computed is in memory)
   const start = (page - 1) * limit;
   const end = start + limit;
 

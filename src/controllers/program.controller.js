@@ -355,7 +355,51 @@ export const addProgramDocuments = async (req, res) => {
   }
 
 }
+/* ======================================================
+   UPLOAD PROGRAM PROOF (FOR COMPLETED PROGRAMS)
+====================================================== */
 
+export const uploadProgramProof = async (req, res) => {
+
+  try {
+
+    if (!req.file) {
+
+      return res.status(400).json({
+        success: false,
+        message: "No proof image uploaded"
+      })
+
+    }
+
+    const imageUrl = await uploadToCloudinary(
+      req.file,
+      process.env.CLOUDINARY_PROGRAMS_FOLDER,
+      "image"
+    )
+
+    const program =
+      await ProgramService.uploadProgramProofService(
+        req.params.id,
+        imageUrl,
+        req.user?.fullName ?? null
+      )
+
+    return res.status(200).json({
+      success: true,
+      data: program
+    })
+
+  } catch (error) {
+
+    return res.status(400).json({
+      success: false,
+      message: error.message
+    })
+
+  }
+
+}
 
 /* ======================================================
    TOGGLE ACTIVE STATUS

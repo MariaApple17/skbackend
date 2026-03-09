@@ -8,19 +8,22 @@ const getCategoryCap = (budget, category) =>
     : Number(budget.youthAmount);
 
 export const getPublicBudgetPlanService = async ({ year } = {}) => {
+
+  /* ================= FISCAL YEAR ================= */
   const fiscalYear = year
     ? await db.fiscalYear.findFirst({
-      where: { year: Number(year), deletedAt: null },
-    })
+        where: { year: Number(year), deletedAt: null },
+      })
     : await db.fiscalYear.findFirst({
-      where: { isActive: true, deletedAt: null },
-      orderBy: { year: 'desc' },
-    });
+        where: { isActive: true, deletedAt: null },
+        orderBy: { year: 'desc' },
+      });
 
   if (!fiscalYear) {
     throw new Error('Fiscal year not found');
   }
 
+  /* ================= BUDGET ================= */
   const budget = await db.budget.findFirst({
     where: { fiscalYearId: fiscalYear.id, deletedAt: null },
     include: {
@@ -52,12 +55,10 @@ export const getPublicBudgetPlanService = async ({ year } = {}) => {
     throw new Error('No budget found for this fiscal year');
   }
 
+  /* ================= SYSTEM PROFILE & OFFICIALS ================= */
   const [systemProfile, skOfficials] = await Promise.all([
     db.systemProfile.findFirst({
-      where: {
-        fiscalYearId: fiscalYear.id,
-        deletedAt: null,
-      },
+      where: { fiscalYearId: fiscalYear.id, deletedAt: null },
       select: {
         id: true,
         systemName: true,
@@ -66,11 +67,9 @@ export const getPublicBudgetPlanService = async ({ year } = {}) => {
         location: true,
       },
     }),
+
     db.skOfficial.findMany({
-      where: {
-        fiscalYearId: fiscalYear.id,
-        deletedAt: null,
-      },
+      where: { fiscalYearId: fiscalYear.id, deletedAt: null },
       orderBy: [{ position: 'asc' }, { fullName: 'asc' }],
       select: {
         id: true,
@@ -83,14 +82,18 @@ export const getPublicBudgetPlanService = async ({ year } = {}) => {
     }),
   ]);
 
+  /* ================= CATEGORY SUMMARY ================= */
   const categorySummary = CATEGORY_VALUES.map((category) => {
     const cap = getCategoryCap(budget, category);
+
     const planned = budget.classificationLimits
       .filter((l) => l.category === category)
       .reduce((sum, l) => sum + Number(l.limitAmount), 0);
+
     const allocated = budget.allocations
       .filter((a) => a.category === category)
       .reduce((sum, a) => sum + Number(a.allocatedAmount), 0);
+
     const used = budget.allocations
       .filter((a) => a.category === category)
       .reduce((sum, a) => sum + Number(a.usedAmount), 0);
@@ -105,7 +108,9 @@ export const getPublicBudgetPlanService = async ({ year } = {}) => {
     };
   });
 
+  /* ================= CLASSIFICATION LIMITS ================= */
   const classificationLimits = budget.classificationLimits.map((limit) => {
+
     const relatedAllocations = budget.allocations.filter(
       (a) =>
         a.classificationId === limit.classificationId &&
@@ -116,16 +121,18 @@ export const getPublicBudgetPlanService = async ({ year } = {}) => {
       (sum, a) => sum + Number(a.allocatedAmount),
       0
     );
+
     const used = relatedAllocations.reduce(
       (sum, a) => sum + Number(a.usedAmount),
       0
     );
+
     const limitAmount = Number(limit.limitAmount);
 
     return {
-      classificationId: limit.classification.id,
-      classificationCode: limit.classification.code,
-      classificationName: limit.classification.name,
+      classificationId: limit.classification?.id ?? null,
+      classificationCode: limit.classification?.code ?? '',
+      classificationName: limit.classification?.name ?? '',
       category: limit.category,
       limitAmount,
       allocated,
@@ -134,8 +141,14 @@ export const getPublicBudgetPlanService = async ({ year } = {}) => {
     };
   });
 
+  /* ================= PROGRAMS ================= */
   const programMap = {};
+
   for (const a of budget.allocations) {
+
+    /* skip if relations missing */
+    if (!a.program || !a.classification || !a.object) continue;
+
     if (!programMap[a.programId]) {
       programMap[a.programId] = {
         programId: a.program.id,
@@ -152,30 +165,34 @@ export const getPublicBudgetPlanService = async ({ year } = {}) => {
 
     programMap[a.programId].totalAllocated += allocatedAmount;
     programMap[a.programId].totalUsed += usedAmount;
+
     programMap[a.programId].allocations.push({
       allocationId: a.id,
       category: a.category,
-      classificationCode: a.classification.code,
-      classificationName: a.classification.name,
-      objectCode: a.object.code,
-      objectName: a.object.name,
+      classificationCode: a.classification?.code ?? '',
+      classificationName: a.classification?.name ?? '',
+      objectCode: a.object?.code ?? '',
+      objectName: a.object?.name ?? '',
       allocatedAmount,
       usedAmount,
     });
   }
 
+  /* ================= FINAL RESPONSE ================= */
   return {
     fiscalYear: {
       id: fiscalYear.id,
       year: fiscalYear.year,
       isActive: fiscalYear.isActive,
     },
+
     budget: {
       id: budget.id,
       totalAmount: Number(budget.totalAmount),
       administrativeAmount: Number(budget.administrativeAmount),
       youthAmount: Number(budget.youthAmount),
     },
+
     systemProfile,
     skOfficials,
     categorySummary,

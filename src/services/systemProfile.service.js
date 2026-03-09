@@ -8,39 +8,47 @@ const isNonEmptyString = (val) =>
 ====================================================== */
 export const getSystemProfile = async () => {
 
-  let profile = await db.systemProfile.findFirst({
-    include:{
-      FiscalYear:true
-    }
-  })
+  let profile = await db.systemProfile.findFirst()
 
   /* AUTO CREATE DEFAULT PROFILE */
   if(!profile){
-
-    const currentYear = new Date().getFullYear()
 
     profile = await db.systemProfile.create({
       data:{
         systemName:'SK360',
         systemDescription:'Project, Budget, and Report Monitoring System',
-        location:'',
-        logoUrl:'',
-
-        /* REQUIRED RELATION FIX */
-        FiscalYear:{
-          create:{
-            year:currentYear,
-            isActive:true
-          }
-        }
-      },
-      include:{
-        FiscalYear:true
+        location:'Bongbong, Trinidad, Bohol',
+        logoUrl:''
       }
     })
   }
 
-  return profile
+  /* ================= ACTIVE FISCAL YEAR ================= */
+
+  const activeFiscalYear = await db.fiscalYear.findFirst({
+    where:{
+      isActive:true,
+      deletedAt:null
+    }
+  })
+
+  /* ================= RETURN CLEAN RESPONSE ================= */
+
+  return {
+    id: profile.id,
+    systemName: profile.systemName,
+    systemDescription: profile.systemDescription,
+    location: profile.location,
+    logoUrl: profile.logoUrl,
+
+    fiscalYear: activeFiscalYear
+      ? {
+          id: activeFiscalYear.id,
+          year: activeFiscalYear.year,
+          isActive: activeFiscalYear.isActive
+        }
+      : null
+  }
 }
 
 
@@ -107,7 +115,7 @@ export const updateSystemProfile = async (payload) => {
     }
   }
 
-  /* ================= UPDATE ================= */
+  /* ================= UPDATE PROFILE ================= */
 
   const updated = await db.systemProfile.update({
     where:{ id:profile.id },
@@ -119,5 +127,30 @@ export const updateSystemProfile = async (payload) => {
     }
   })
 
-  return updated
+  /* ================= GET ACTIVE FISCAL YEAR ================= */
+
+  const activeFiscalYear = await db.fiscalYear.findFirst({
+    where:{
+      isActive:true,
+      deletedAt:null
+    }
+  })
+
+  /* ================= RETURN CLEAN RESPONSE ================= */
+
+  return {
+    id: updated.id,
+    systemName: updated.systemName,
+    systemDescription: updated.systemDescription,
+    location: updated.location,
+    logoUrl: updated.logoUrl,
+
+    fiscalYear: activeFiscalYear
+      ? {
+          id: activeFiscalYear.id,
+          year: activeFiscalYear.year,
+          isActive: activeFiscalYear.isActive
+        }
+      : null
+  }
 }

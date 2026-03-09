@@ -1,5 +1,4 @@
 import express from "express"
-
 import {
 addProgramDocuments,
 createProgram,
@@ -9,7 +8,8 @@ getPrograms,
 toggleProgramStatus,
 updateProgram,
 approveProgram,
-rejectProgram
+rejectProgram,
+uploadProgramProof
 } from "../controllers/program.controller.js"
 
 import { authMiddleware } from "../middlewares/auth.middleware.js"
@@ -28,7 +28,16 @@ uploadProgramImage.array("documents",10),
 createProgram
 )
 
+/* ======================================================
+   UPLOAD PROGRAM PROOF (FOR COMPLETED PROGRAM)
+====================================================== */
 
+router.post(
+"/:id/upload-proof",
+authMiddleware,
+uploadProgramImage.single("file"),
+uploadProgramProof
+)
 /* ======================================================
    GET ALL PROGRAMS
 ====================================================== */
