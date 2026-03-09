@@ -31,7 +31,7 @@ app.use(
       "http://localhost:3000",
       "https://skfrontend-six.vercel.app"
     ],
-    credentials: true
+    methods: ["GET","POST","PUT","DELETE","PATCH"]
   })
 );
 app.use(express.json());
