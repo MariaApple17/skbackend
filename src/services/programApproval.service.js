@@ -25,7 +25,6 @@ return total
 /* ======================================================
    GET PROGRAMS (WITH PROPOSED BY + APPROVALS)
 ====================================================== */
-
 export const getProgramsService = async () => {
 
 const programs = await db.program.findMany({
@@ -62,26 +61,26 @@ createdAt:"desc"
 }
 
 })
+return programs.map(p => ({
 
-return programs.map(p=>({
+  id: p.id,
+  name: p.name,
+  description: p.description,
 
-id:p.id,
-name:p.name,
-description:p.description,
+  approvalStatus: p.status,
 
-approvalStatus:p.status,
+  user: {
+    fullName: p.createdBy?.fullName ?? "Unknown"
+  },
 
-proposedBy:p.createdBy?.fullName ?? "Unknown",
+  approvals: p.approvals.map(a => ({
+    member: a.approver?.fullName ?? "Unknown",
+    userId: a.approver?.id,
+    decision: a.status === "APPROVED" ? "approved" : "rejected",
+    date: a.createdAt
+  }))
 
-approvals:p.approvals.map(a=>({
-member:a.approver?.fullName ?? "Unknown",
-userId:a.approver?.id,
-decision:a.status === "APPROVED" ? "approved" : "rejected",
-date:a.createdAt
 }))
-
-}))
-
 }
 
 /* ======================================================
