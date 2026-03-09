@@ -223,9 +223,10 @@ export const approveRequest = async (requestId, approverId, remarks) => {
     }
 
     // ✅ Use stored usedAmount instead of dynamic COMPLETED computation
-    const remaining =
-      Number(request.allocation.allocatedAmount) -
-      Number(request.allocation.usedAmount);
+    const allocated = Number(request.allocation.allocatedAmount || 0)
+const used = Number(request.allocation.usedAmount || 0)
+
+const remaining = Math.max(0, allocated - used)
 
     if (request.amount > remaining) {
       throw new AppError(
@@ -341,38 +342,35 @@ export const markPurchased = async requestId => {
 
 /* ================= COMPLETE REQUEST ================= */
 export const completeRequest = async requestId => {
+
   requestId = toNumber(requestId, 'requestId');
 
   return db.$transaction(async tx => {
+
     const request = await tx.procurementRequest.findFirst({
-      where: { id: requestId, deletedAt: null },
-      include: { allocation: true },
+      where:{ id:requestId, deletedAt:null }
     });
 
-    if (!request) {
-      throw new AppError('Request not found', 404, 'NOT_FOUND');
+    if(!request){
+      throw new AppError('Request not found',404,'NOT_FOUND');
     }
 
-    if (request.status !== 'PURCHASED') {
+    if(request.status !== 'PURCHASED'){
       throw new AppError(
         'Only purchased requests can be completed',
         400,
         'INVALID_STATUS_TRANSITION',
-        { currentStatus: request.status }
+        { currentStatus:request.status }
       );
     }
-await tx.budgetAllocation.update({
-  where: { id: request.allocationId },
-  data: {
-    usedAmount: { increment: Number(request.amount) },
-  },
-});
 
     return tx.procurementRequest.update({
-      where: { id: requestId },
-      data: { status: 'COMPLETED' },
+      where:{ id:requestId },
+      data:{ status:'COMPLETED' }
     });
+
   });
+
 };
 
 /* ================= UPLOAD PROOF ================= */

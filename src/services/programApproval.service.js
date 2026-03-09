@@ -23,23 +23,14 @@ return total
 }
 
 /* ======================================================
-   GET PROGRAMS (WITH PROPOSED BY + APPROVALS)
+   GET PROGRAMS
 ====================================================== */
+
 export const getProgramsService = async () => {
 
 const programs = await db.program.findMany({
 
 include:{
-createdBy:{
-select:{
-id:true,
-fullName:true,
-role:{
-select:{ name:true }
-}
-}
-},
-
 approvals:{
 include:{
 approver:{
@@ -53,7 +44,6 @@ orderBy:{
 createdAt:"asc"
 }
 }
-
 },
 
 orderBy:{
@@ -61,26 +51,23 @@ createdAt:"desc"
 }
 
 })
+
 return programs.map(p => ({
 
-  id: p.id,
-  name: p.name,
-  description: p.description,
+id: p.id,
+name: p.name,
+description: p.description,
+approvalStatus: p.status,
 
-  approvalStatus: p.status,
-
-  user: {
-    fullName: p.createdBy?.fullName ?? "Unknown"
-  },
-
-  approvals: p.approvals.map(a => ({
-    member: a.approver?.fullName ?? "Unknown",
-    userId: a.approver?.id,
-    decision: a.status === "APPROVED" ? "approved" : "rejected",
-    date: a.createdAt
-  }))
+approvals: p.approvals.map(a => ({
+member: a.approver?.fullName ?? "Unknown",
+userId: a.approver?.id,
+decision: a.status === "APPROVED" ? "approved" : "rejected",
+date: a.createdAt
+}))
 
 }))
+
 }
 
 /* ======================================================
@@ -99,7 +86,7 @@ where:{ id:programId }
 
 if(!program) throw new Error("Program not found")
 
-if(program.status === "UPCOMING")
+if(program.status === "APPROVED")
 throw new Error("Program already approved")
 
 if(program.status === "REJECTED")
@@ -166,7 +153,7 @@ let newStatus = program.status
 
 if(approvals >= majority){
 
-newStatus = "UPCOMING"
+newStatus = "APPROVED"
 
 await db.program.update({
 where:{ id:programId },
@@ -203,7 +190,7 @@ where:{ id:programId }
 
 if(!program) throw new Error("Program not found")
 
-if(program.status === "UPCOMING")
+if(program.status === "APPROVED")
 throw new Error("Program already approved")
 
 if(program.status === "REJECTED")

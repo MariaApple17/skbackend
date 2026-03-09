@@ -1,74 +1,96 @@
 import { db } from "../config/db.config.js"
 
 /* ======================================================
+   HELPER: COUNT COUNCIL MEMBERS
+====================================================== */
+
+const getCouncilMembersCount = async () => {
+
+  const total = await db.user.count({
+    where:{
+      deletedAt:null,
+      status:"ACTIVE",
+      role:{
+        name:{
+          in:["SK CHAIRPERSON","SK KAGAWAD"]
+        }
+      }
+    }
+  })
+
+  return total
+}
+
+/* ======================================================
    CREATE PROGRAM
 ====================================================== */
 
 export const createProgramService = async (data) => {
 
-const {
-code,
-name,
-description,
-committeeInCharge,
-beneficiaries,
-startDate,
-endDate,
-isActive = true,
-documents = []
-} = data
+  const {
+    code,
+    name,
+    description,
+    committeeInCharge,
+    beneficiaries,
+    startDate,
+    endDate,
+    isActive = true,
+    documents = []
+  } = data
 
-const existing = await db.program.findFirst({
-where:{ code, deletedAt:null }
-})
+  const existing = await db.program.findFirst({
+    where:{ code, deletedAt:null }
+  })
 
-if(existing){
-throw new Error("Program code already exists")
+  if(existing){
+    throw new Error("Program code already exists")
+  }
+
+  const activeFiscalYear = await db.fiscalYear.findFirst({
+    where:{ isActive:true, deletedAt:null }
+  })
+
+  if(!activeFiscalYear){
+    throw new Error("No active fiscal year found")
+  }
+
+  return db.program.create({
+
+    data:{
+      code,
+      name,
+      description,
+      committeeInCharge,
+      beneficiaries,
+
+      startDate: startDate ? new Date(startDate) : null,
+      endDate: endDate ? new Date(endDate) : null,
+
+      isActive,
+
+      fiscalYearId:activeFiscalYear.id,
+
+      ...(documents?.length > 0 && {
+        proofPhotos:{
+          create:documents.map(d=>({
+            imageUrl:d.imageUrl,
+            title:d.title ?? null,
+            description:d.description ?? null,
+            uploadedBy:d.uploadedBy ?? null
+          }))
+        }
+      })
+
+    },
+
+    include:{
+      proofPhotos:true
+    }
+
+  })
+
 }
-
-const activeFiscalYear = await db.fiscalYear.findFirst({
-where:{ isActive:true, deletedAt:null }
-})
-
-if(!activeFiscalYear){
-throw new Error("No active fiscal year found")
-}
-
-return db.program.create({
-
-data:{
-code,
-name,
-description,
-committeeInCharge,
-beneficiaries,
-
-startDate:startDate ? new Date(startDate) : null,
-endDate:endDate ? new Date(endDate) : null,
-
-isActive,
-
-fiscalYearId:activeFiscalYear.id,
-
-...(documents.length>0 && {
-documents:{
-create:documents.map(d=>({
-imageUrl:d.imageUrl,
-title:d.title ?? null,
-description:d.description ?? null,
-uploadedBy:d.uploadedBy ?? null
-}))
-}
-})
-
-},
-
-include:{ documents:true }
-
-})
-
-}
-
 
 /* ======================================================
    GET ALL PROGRAMS
@@ -76,160 +98,104 @@ include:{ documents:true }
 
 export const getAllProgramsService = async (query)=>{
 
-const {
-q,
-isActive,
-startDateFrom,
-startDateTo,
-sortBy="createdAt",
-sortOrder="desc",
-page=1,
-limit=10
-} = query
+  const {
+    q,
+    startDateFrom,
+    startDateTo,
+    sortBy="createdAt",
+    sortOrder="desc",
+    page=1,
+    limit=10
+  } = query
 
-const activeFiscalYear = await db.fiscalYear.findFirst({
-where:{ isActive:true, deletedAt:null }
-})
+  const activeFiscalYear = await db.fiscalYear.findFirst({
+    where:{ isActive:true, deletedAt:null }
+  })
 
-if(!activeFiscalYear){
+  if(!activeFiscalYear){
 
-return{
-data:[],
-meta:{ total:0,page:1,limit:Number(limit),totalPages:0 }
-}
+    return{
+      data:[],
+      meta:{ total:0,page:1,limit:Number(limit),totalPages:0 }
+    }
 
-}
+  }
 
-const where = {
+  const where = {
 
-deletedAt:null,
-fiscalYearId:activeFiscalYear.id,
+    deletedAt:null,
+    fiscalYearId:activeFiscalYear.id,
 
-...(q && {
-OR:[
-{ code:{ contains:q,mode:"insensitive"} },
-{ name:{ contains:q,mode:"insensitive"} },
-{ description:{ contains:q,mode:"insensitive"} },
-{ committeeInCharge:{ contains:q,mode:"insensitive"} },
-{ beneficiaries:{ contains:q,mode:"insensitive"} }
-]
-}),
+    ...(q && {
+      OR:[
+        { code:{ contains:q,mode:"insensitive"} },
+        { name:{ contains:q,mode:"insensitive"} },
+        { description:{ contains:q,mode:"insensitive"} },
+        { committeeInCharge:{ contains:q,mode:"insensitive"} },
+        { beneficiaries:{ contains:q,mode:"insensitive"} }
+      ]
+    }),
 
-...((startDateFrom || startDateTo) && {
+    ...((startDateFrom || startDateTo) && {
+      startDate:{
+        ...(startDateFrom && { gte:new Date(startDateFrom)}),
+        ...(startDateTo && { lte:new Date(startDateTo)})
+      }
+    })
 
-startDate:{
-...(startDateFrom && { gte:new Date(startDateFrom)}),
-...(startDateTo && { lte:new Date(startDateTo)})
-}
+  }
 
-})
+  const skip = (Number(page)-1) * Number(limit)
 
-}
+  const [data,total] = await Promise.all([
 
-const skip = (Number(page)-1) * Number(limit)
+    db.program.findMany({
 
-const [data,total] = await Promise.all([
+      where,
+      orderBy:{ [sortBy]:sortOrder },
+      skip,
+      take:Number(limit),
 
-db.program.findMany({
+      include:{
+        proofPhotos:true,
+        approvals:{
+          include:{ approver:true }
+        }
+      }
 
-where,
+    }),
 
-orderBy:{ [sortBy]:sortOrder },
+    db.program.count({ where })
 
-skip,
+  ])
 
-take:Number(limit),
+  return{
+    data:data.map(p=>({
 
-include:{
-documents:true,
-approvals:{
-include:{ approver:true }
-}
-}
+      ...p,
 
-}),
+      documents:p.proofPhotos ?? [],
 
-db.program.count({ where })
+      approvalStatus:p.status,
 
-])
+      approvals:(p.approvals ?? []).map(a=>({
+        member:a.approver?.fullName ?? "Unknown",
+        userId:a.approverId,
+        decision:a.status.toLowerCase(),
+        date:a.createdAt
+      }))
 
+    })),
 
-/* ============================================
-   AUTO STATUS + AUTO ACTIVE
-============================================ */
-
-const now = new Date()
-
-const formatted = data.map(program => {
-
-const start = program.startDate ? new Date(program.startDate) : null
-const end = program.endDate ? new Date(program.endDate) : null
-
-let autoActive = false
-
-if(program.status === "APPROVED"){
-
-if(start && now < start){
-autoActive = true
-}
-
-if(start && end && now >= start && now <= end){
-autoActive = true
-}
+    meta:{
+      total,
+      page:Number(page),
+      limit:Number(limit),
+      totalPages:Math.ceil(total/limit)
+    }
+  }
 
 }
-
-if(end && now > end){
-autoActive = false
-}
-
-/* FILTER ACTIVE DROPDOWN */
-
-if(isActive !== undefined && isActive !== ""){
-
-const filterActive = isActive === true || isActive === "true"
-
-if(autoActive !== filterActive){
-return null
-}
-
-}
-
-return{
-
-...program,
-
-isActive:autoActive,
-
-approvalStatus:program.status.toLowerCase(),
-
-approvals:(program.approvals ?? []).map(a=>({
-member:a.approver?.fullName ?? "Unknown",
-userId:a.approverId,
-decision:a.status.toLowerCase(),
-date:a.createdAt
-}))
-
-}
-
-}).filter(Boolean)
-
-
-return{
-
-data:formatted,
-
-meta:{
-total:formatted.length,
-page:Number(page),
-limit:Number(limit),
-totalPages:Math.ceil(formatted.length/limit)
-}
-
-}
-
-}
-
 
 /* ======================================================
    GET PROGRAM BY ID
@@ -237,179 +203,169 @@ totalPages:Math.ceil(formatted.length/limit)
 
 export const getProgramByIdService = async(id)=>{
 
-const program = await db.program.findFirst({
+  const program = await db.program.findFirst({
 
-where:{ id:Number(id), deletedAt:null },
+    where:{ id:Number(id), deletedAt:null },
 
-include:{
-documents:true,
-approvals:{
-include:{ approver:true }
+    include:{
+      proofPhotos:true,
+      approvals:{
+        include:{ approver:true }
+      }
+    }
+
+  })
+
+  if(!program){
+    throw new Error("Program not found")
+  }
+
+  return{
+    ...program,
+    documents:program.proofPhotos ?? []
+  }
+
 }
-}
-
-})
-
-if(!program){
-throw new Error("Program not found")
-}
-
-return program
-
-}
-
 
 /* ======================================================
    APPROVE PROGRAM
 ====================================================== */
 
-export const approveProgramService = async(programId,userId)=>{
+export const approveProgramService = async (programId,userId)=>{
 
-programId = Number(programId)
+  programId = Number(programId)
 
-await getProgramByIdService(programId)
+  const program = await db.program.findUnique({
+    where:{ id:programId }
+  })
 
-const existingVote = await db.programApproval.findFirst({
-where:{ programId, approverId:userId }
-})
+  if(!program) throw new Error("Program not found")
 
-if(existingVote){
-throw new Error("You already voted for this program")
+  if(program.status === "APPROVED")
+  throw new Error("Program already approved")
+
+  if(program.status === "REJECTED")
+  throw new Error("Program already rejected")
+
+  const existingVote = await db.programApproval.findFirst({
+    where:{
+      programId,
+      approverId:userId
+    }
+  })
+
+  if(existingVote){
+    throw new Error("You already voted for this program")
+  }
+
+  await db.programApproval.create({
+    data:{
+      programId,
+      approverId:userId,
+      status:"APPROVED"
+    }
+  })
+
+  const approvals = await db.programApproval.count({
+    where:{
+      programId,
+      status:"APPROVED"
+    }
+  })
+
+  const totalOfficials = await getCouncilMembersCount()
+
+  const majority = Math.floor(totalOfficials / 2) + 1
+
+  let newStatus = program.status
+
+  if(approvals >= majority){
+
+    newStatus = "APPROVED"
+
+    await db.program.update({
+      where:{ id:programId },
+      data:{ status:newStatus }
+    })
+
+  }
+
+  return{
+    message:"Approval recorded",
+    approvals,
+    officials:totalOfficials,
+    majority,
+    programStatus:newStatus
+  }
+
 }
-
-await db.programApproval.create({
-
-data:{
-programId,
-approverId:userId,
-status:"APPROVED"
-}
-
-})
-
-const approvals = await db.programApproval.count({
-
-where:{
-programId,
-status:"APPROVED"
-}
-
-})
-
-const majority = 3
-
-if(approvals >= majority){
-
-await db.program.update({
-
-where:{ id:programId },
-
-data:{ status:"APPROVED" }
-
-})
-
-}
-
-return { message:"Vote recorded" }
-
-}
-
 
 /* ======================================================
    REJECT PROGRAM
 ====================================================== */
 
-export const rejectProgramService = async(programId,userId)=>{
+export const rejectProgramService = async (programId,userId)=>{
 
-programId = Number(programId)
+  programId = Number(programId)
 
-await getProgramByIdService(programId)
+  const program = await db.program.findUnique({
+    where:{ id:programId }
+  })
 
-const existingVote = await db.programApproval.findFirst({
-where:{ programId, approverId:userId }
-})
+  if(!program) throw new Error("Program not found")
 
-if(existingVote){
-throw new Error("You already voted")
-}
+  const existingVote = await db.programApproval.findFirst({
+    where:{
+      programId,
+      approverId:userId
+    }
+  })
 
-await db.programApproval.create({
+  if(existingVote){
+    throw new Error("You already voted")
+  }
 
-data:{
-programId,
-approverId:userId,
-status:"REJECTED"
-}
+  await db.programApproval.create({
+    data:{
+      programId,
+      approverId:userId,
+      status:"REJECTED"
+    }
+  })
 
-})
+  const rejections = await db.programApproval.count({
+    where:{
+      programId,
+      status:"REJECTED"
+    }
+  })
 
-const rejections = await db.programApproval.count({
+  const totalOfficials = await getCouncilMembersCount()
 
-where:{
-programId,
-status:"REJECTED"
-}
+  const majority = Math.floor(totalOfficials / 2) + 1
 
-})
+  let newStatus = program.status
 
-const majority = 3
+  if(rejections >= majority){
 
-if(rejections >= majority){
+    newStatus = "REJECTED"
 
-await db.program.update({
+    await db.program.update({
+      where:{ id:programId },
+      data:{ status:newStatus }
+    })
 
-where:{ id:programId },
+  }
 
-data:{ status:"REJECTED" }
-
-})
-
-}
-
-return { message:"Vote recorded" }
-
-}
-
-
-/* ======================================================
-   UPDATE PROGRAM
-====================================================== */
-
-export const updateProgramService = async(id,data)=>{
-
-const programId = Number(id)
-
-await getProgramByIdService(programId)
-
-const updateData={
-
-...(data.code && { code:data.code }),
-...(data.name && { name:data.name }),
-...(data.description && { description:data.description }),
-...(data.committeeInCharge && { committeeInCharge:data.committeeInCharge }),
-...(data.beneficiaries && { beneficiaries:data.beneficiaries }),
-
-...(data.isActive!==undefined && {
-isActive:data.isActive===true || data.isActive==="true"
-}),
-
-...(data.startDate && { startDate:new Date(data.startDate) }),
-...(data.endDate && { endDate:new Date(data.endDate) })
+  return{
+    message:"Rejection recorded",
+    rejections,
+    officials:totalOfficials,
+    majority,
+    programStatus:newStatus
+  }
 
 }
-
-return db.program.update({
-
-where:{ id:programId },
-
-data:updateData,
-
-include:{ documents:true }
-
-})
-
-}
-
 
 /* ======================================================
    DELETE PROGRAM
@@ -417,14 +373,14 @@ include:{ documents:true }
 
 export const deleteProgramService = async(id)=>{
 
-await getProgramByIdService(id)
+  await getProgramByIdService(id)
 
-return db.program.update({
+  return db.program.update({
 
-where:{ id:Number(id) },
+    where:{ id:Number(id) },
 
-data:{ deletedAt:new Date() }
+    data:{ deletedAt:new Date() }
 
-})
+  })
 
 }
