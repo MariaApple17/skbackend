@@ -76,6 +76,40 @@ const VALID_STATUSES = [
   'COMPLETED',
 ];
 
+const getAllocationForFiscalYear = async (
+  allocationId,
+  fiscalYearId
+) => {
+  const allocation = await db.budgetAllocation.findFirst({
+    where: {
+      id: toNumber(allocationId, 'allocationId'),
+      deletedAt: null,
+      budget: {
+        is: {
+          fiscalYearId: toNumber(fiscalYearId, 'fiscalYearId'),
+          deletedAt: null,
+        },
+      },
+    },
+    include: {
+      program: true,
+      classification: true,
+      object: true,
+      budget: true,
+    },
+  });
+
+  if (!allocation) {
+    throw new AppError(
+      'Budget allocation not found for the selected fiscal year',
+      404,
+      'ALLOCATION_NOT_FOUND'
+    );
+  }
+
+  return allocation;
+};
+
 /* ================= CREATE REQUEST ================= */
 export const createRequest = async (data, userId, fiscalYearId) => {
   if (!fiscalYearId) {
@@ -88,6 +122,15 @@ export const createRequest = async (data, userId, fiscalYearId) => {
 
   const allocationId = toNumber(data.allocationId, 'allocationId');
   const items = normalizeItems(data.items);
+  const title = data.title?.trim();
+
+  if (!title) {
+    throw new AppError(
+      'Title is required',
+      400,
+      'TITLE_REQUIRED'
+    );
+  }
 
   const computedAmount = items.reduce(
     (sum, i) => sum + i.totalPrice,
@@ -102,9 +145,11 @@ export const createRequest = async (data, userId, fiscalYearId) => {
     );
   }
 
+  await getAllocationForFiscalYear(allocationId, fiscalYearId);
+
   return db.procurementRequest.create({
     data: {
-      title: data.title?.trim(),
+      title,
       description: data.description ?? null,
       amount: computedAmount,
       allocationId,
@@ -129,37 +174,86 @@ export const createRequest = async (data, userId, fiscalYearId) => {
 export const updateRequest = async (id, data) => {
   id = toNumber(id, 'requestId');
 
-  const request = await db.procurementRequest.findFirst({
-    where: { id, deletedAt: null },
-  });
+  return db.$transaction(async (tx) => {
+    const request = await tx.procurementRequest.findFirst({
+      where: { id, deletedAt: null },
+      include: { items: true },
+    });
 
-  if (!request) {
-    throw new AppError('Request not found', 404, 'NOT_FOUND');
-  }
+    if (!request) {
+      throw new AppError('Request not found', 404, 'NOT_FOUND');
+    }
 
-  if (request.status !== 'DRAFT') {
-    throw new AppError(
-      'Only draft requests can be updated',
-      400,
-      'INVALID_STATUS_TRANSITION',
-      { currentStatus: request.status }
+    if (request.status !== 'DRAFT') {
+      throw new AppError(
+        'Only draft requests can be updated',
+        400,
+        'INVALID_STATUS_TRANSITION',
+        { currentStatus: request.status }
+      );
+    }
+
+    const title =
+      typeof data.title === 'string'
+        ? data.title.trim()
+        : request.title;
+
+    if (!title) {
+      throw new AppError(
+        'Title is required',
+        400,
+        'TITLE_REQUIRED'
+      );
+    }
+
+    const items = normalizeItems(
+      data.items ?? request.items
     );
-  }
 
-  const unit = data.unit?.trim();
+    const amount = items.reduce(
+      (sum, item) => sum + item.totalPrice,
+      0
+    );
 
-  if (data.unit !== undefined && !unit) {
-    throw new AppError('Unit cannot be empty', 400, 'INVALID_UNIT');
-  }
+    const allocationId =
+      data.allocationId !== undefined
+        ? toNumber(data.allocationId, 'allocationId')
+        : request.allocationId;
 
-  return db.procurementRequest.update({
-    where: { id },
-    data: {
-      title: data.title?.trim(),
-      description: data.description ?? null,
-      ...(data.unit !== undefined && { unit }),
-      amount: toNumber(data.amount, 'amount'),
-    },
+    await getAllocationForFiscalYear(
+      allocationId,
+      request.fiscalYearId
+    );
+
+    await tx.procurementItem.deleteMany({
+      where: { requestId: id },
+    });
+
+    return tx.procurementRequest.update({
+      where: { id },
+      data: {
+        title,
+        description:
+          data.description !== undefined
+            ? data.description?.trim() || null
+            : request.description,
+        allocationId,
+        amount,
+        items: {
+          create: items,
+        },
+      },
+      include: {
+        items: true,
+        allocation: {
+          include: {
+            program: true,
+            classification: true,
+            object: true,
+          },
+        },
+      },
+    });
   });
 };
 
@@ -385,6 +479,15 @@ export const uploadProof = async (data, userId) => {
     throw new AppError('Request not found', 404, 'NOT_FOUND');
   }
 
+  if (!['PURCHASED', 'COMPLETED'].includes(request.status)) {
+    throw new AppError(
+      'Proof can only be uploaded after the request is marked as purchased',
+      400,
+      'INVALID_STATUS_TRANSITION',
+      { currentStatus: request.status }
+    );
+  }
+
   return db.procurementProof.create({
     data: {
       requestId,
@@ -406,6 +509,7 @@ export const getAllRequests = async ({
 }) => {
   page = Number(page) || 1;
   limit = Number(limit) || 10;
+  const normalizedStatus = status?.toString().toUpperCase();
 
   page = Math.max(1, page);
   limit = Math.min(100, Math.max(1, limit));
@@ -418,7 +522,10 @@ export const getAllRequests = async ({
     );
   }
 
-  if (status && !VALID_STATUSES.includes(status)) {
+  if (
+    normalizedStatus &&
+    !VALID_STATUSES.includes(normalizedStatus)
+  ) {
     throw new AppError(
       'Invalid request status',
       400,
@@ -450,8 +557,8 @@ export const getAllRequests = async ({
   }
 
   /* ================= STATUS FILTER ================= */
-  if (status) {
-    where.status = status;
+  if (normalizedStatus) {
+    where.status = normalizedStatus;
   }
 
   const skip = (page - 1) * limit;
@@ -545,7 +652,13 @@ export const getDraftRequestById = async id => {
     },
     include: {
       items: true,
-      allocation: true,
+      allocation: {
+        include: {
+          program: true,
+          classification: true,
+          object: true,
+        },
+      },
       vendor: true,
       createdBy: true,
     },

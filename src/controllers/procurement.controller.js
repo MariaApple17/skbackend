@@ -176,7 +176,10 @@ export const uploadProof = async (req, res) => {
       };
     }
 
-    const requestId = parseId(req.body.requestId, 'requestId');
+    const requestId = parseId(
+      req.body.requestId ?? req.params.id,
+      'requestId'
+    );
 
     if (!req.body.type?.trim()) {
       throw {
@@ -217,6 +220,8 @@ export const uploadProof = async (req, res) => {
 
 export const getAllRequests = async (req, res) => {
   try {
+    const requestedFiscalYearId = Number(req.query.fiscalYearId);
+
     const result = await procurementService.getAllRequests({
       q: typeof req.query.q === 'string' ? req.query.q : '',
       status:
@@ -225,7 +230,11 @@ export const getAllRequests = async (req, res) => {
           : undefined,
       page: Number(req.query.page) || 1,
       limit: Number(req.query.limit) || 10,
-      fiscalYearId: req.activeFiscalYearId,
+      fiscalYearId:
+        Number.isFinite(requestedFiscalYearId) &&
+        requestedFiscalYearId > 0
+          ? requestedFiscalYearId
+          : req.activeFiscalYearId,
     });
 
     return sendSuccess(res, 200, result);

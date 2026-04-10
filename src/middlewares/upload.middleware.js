@@ -23,7 +23,7 @@ const storage = multer.diskStorage({
   },
 });
 
-/* ================= FILTER ================= */
+/* ================= FILTERS ================= */
 
 const imageOnly = (_req, file, cb) => {
   if (!file.mimetype.startsWith('image/')) {
@@ -35,21 +35,51 @@ const imageOnly = (_req, file, cb) => {
   cb(null, true);
 };
 
-/* ================= BASE UPLOAD ================= */
+const PROOF_FILE_TYPES = new Set([
+  'image/jpeg',
+  'image/png',
+  'application/pdf',
+]);
 
-const baseUpload = multer({
-  storage,
-  fileFilter: imageOnly,
-  limits: {
-    fileSize: 2 * 1024 * 1024, // 2MB
-  },
-});
+const proofFileFilter = (_req, file, cb) => {
+  if (!PROOF_FILE_TYPES.has(file.mimetype)) {
+    return cb(
+      new Error('Only JPG, PNG, or PDF files are allowed'),
+      false
+    );
+  }
+
+  cb(null, true);
+};
+
+/* ================= UPLOAD FACTORY ================= */
+
+const createUpload = (fileFilter, fileSize) =>
+  multer({
+    storage,
+    fileFilter,
+    limits: {
+      fileSize,
+    },
+  });
+
+/* ================= UPLOAD INSTANCES ================= */
+
+const imageUpload = createUpload(
+  imageOnly,
+  2 * 1024 * 1024
+);
+
+export const uploadProofFile = createUpload(
+  proofFileFilter,
+  5 * 1024 * 1024
+);
 
 /* ================= EXPORTS ================= */
 
 // keep explicit intent
-export const uploadProgramImage = baseUpload;
-export const uploadSkOfficialImage = baseUpload;
+export const uploadProgramImage = imageUpload;
+export const uploadSkOfficialImage = imageUpload;
 
 // optional default
-export default baseUpload;
+export default imageUpload;

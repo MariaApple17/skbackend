@@ -18,7 +18,7 @@ import {
 
 import { authMiddleware } from '../middlewares/auth.middleware.js';
 import { activeFiscalYear } from '../middlewares/activeFiscalYear.middleware.js';
-import upload from '../middlewares/upload.middleware.js';
+import { uploadProofFile } from '../middlewares/upload.middleware.js';
 
 const router = Router();
 
@@ -58,7 +58,7 @@ router.delete('/:id', authMiddleware, deleteRequest);
 router.post(
   '/upload-proof',
   authMiddleware,
-  upload.single('file'),
+  uploadProofFile.single('proof'),
   uploadProof
 );
 

@@ -367,7 +367,7 @@ export const uploadProgramProof = async (req, res) => {
 
       return res.status(400).json({
         success: false,
-        message: "No proof image uploaded"
+        message: "No proof file uploaded"
       })
 
     }
@@ -375,14 +375,15 @@ export const uploadProgramProof = async (req, res) => {
     const imageUrl = await uploadToCloudinary(
       req.file,
       process.env.CLOUDINARY_PROGRAMS_FOLDER,
-      "image"
+      "auto"
     )
 
     const program =
       await ProgramService.uploadProgramProofService(
         req.params.id,
         imageUrl,
-        req.user?.fullName ?? null
+        req.user?.fullName ?? null,
+        req.file.originalname
       )
 
     return res.status(200).json({

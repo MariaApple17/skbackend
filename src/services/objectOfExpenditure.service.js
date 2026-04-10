@@ -1,5 +1,37 @@
 import { db } from '../config/db.config.js'
 
+const normalizePositiveInt = (value, fieldName) => {
+  const normalized = Number(value)
+  if (!Number.isInteger(normalized) || normalized <= 0) {
+    throw new Error(`Invalid ${fieldName}`)
+  }
+  return normalized
+}
+
+const ensureClassificationExists = async (classificationId) => {
+  const normalizedClassificationId = normalizePositiveInt(
+    classificationId,
+    'classification id'
+  )
+
+  const classification = await db.budgetClassification.findFirst({
+    where: {
+      id: normalizedClassificationId,
+      deletedAt: null,
+    },
+  })
+
+  if (!classification) {
+    console.warn(
+      '[objectOfExpenditure.service] classification not found',
+      { classificationId: normalizedClassificationId }
+    )
+    throw new Error('Classification not found')
+  }
+
+  return classification
+}
+
 /* ================= CREATE ================= */
 export const createObjectOfExpenditureService = async (data) => {
   const { code, name, description, classificationId } = data
@@ -8,12 +40,21 @@ export const createObjectOfExpenditureService = async (data) => {
     throw new Error('Code, name and classification are required')
   }
 
+  const trimmedCode = String(code).trim()
+  const trimmedName = String(name).trim()
+
+  if (!trimmedCode || !trimmedName) {
+    throw new Error('Code and name are required')
+  }
+
+  await ensureClassificationExists(classificationId)
+
   const exists = await db.objectOfExpenditure.findFirst({
     where: {
       deletedAt: null,
       OR: [
-        { code: code.trim() },
-        { name: name.trim() },
+        { code: trimmedCode },
+        { name: trimmedName },
       ],
     },
   })
@@ -24,8 +65,8 @@ export const createObjectOfExpenditureService = async (data) => {
 
   return db.objectOfExpenditure.create({
     data: {
-      code: code.trim(),
-      name: name.trim(),
+      code: trimmedCode,
+      name: trimmedName,
       description: description?.trim() || null,
       classificationId: Number(classificationId),
     },
@@ -37,11 +78,22 @@ export const createObjectOfExpenditureService = async (data) => {
 
 /* ================= READ (LIST WITH PAGINATION) ================= */
 export const getObjectsOfExpenditureService = async (query) => {
-
   const page = Number(query.page) || 1
   const limit = Number(query.limit) || 10
   const q = query.q || ''
   const order = query.order === 'asc' ? 'asc' : 'desc'
+
+  let classificationId
+  if (query.classificationId !== undefined && query.classificationId !== null && query.classificationId !== '') {
+    classificationId = Number(query.classificationId)
+    if (!Number.isInteger(classificationId) || classificationId <= 0) {
+      console.warn(
+        '[objectOfExpenditure.service] invalid classification filter',
+        { classificationId: query.classificationId }
+      )
+      throw new Error('Invalid classification id')
+    }
+  }
 
   const allowedSort = ['createdAt', 'code', 'name']
   const sortBy = allowedSort.includes(query.sortBy)
@@ -52,6 +104,9 @@ export const getObjectsOfExpenditureService = async (query) => {
 
   const where = {
     deletedAt: null,
+    ...(classificationId && {
+      classificationId,
+    }),
     ...(q && {
       OR: [
         {
@@ -100,12 +155,27 @@ export const getObjectsOfExpenditureService = async (query) => {
 }
 
 /* ================= READ (SINGLE) ================= */
-export const getObjectOfExpenditureByIdService = async (id) => {
+export const getObjectOfExpenditureByIdService = async (idOrCode) => {
+  const rawValue = String(idOrCode ?? '').trim()
+
+  if (!rawValue) {
+    throw new Error('Object of expenditure id or code is required')
+  }
+
+  const searchFilters = [
+    { code: rawValue },
+    { name: rawValue },
+  ]
+
+  const numericId = Number(rawValue)
+  if (Number.isInteger(numericId) && numericId > 0) {
+    searchFilters.unshift({ id: numericId })
+  }
 
   const data = await db.objectOfExpenditure.findFirst({
     where: {
-      id: Number(id),
       deletedAt: null,
+      OR: searchFilters,
     },
     include: {
       classification: true,
@@ -113,6 +183,10 @@ export const getObjectOfExpenditureByIdService = async (id) => {
   })
 
   if (!data) {
+    console.warn(
+      '[objectOfExpenditure.service] object of expenditure not found',
+      { query: rawValue, searchFilters }
+    )
     throw new Error('Object of expenditure not found')
   }
 
@@ -121,10 +195,11 @@ export const getObjectOfExpenditureByIdService = async (id) => {
 
 /* ================= UPDATE ================= */
 export const updateObjectOfExpenditureService = async (id, data) => {
+  const objectId = normalizePositiveInt(id, 'object id')
 
   const existing = await db.objectOfExpenditure.findFirst({
     where: {
-      id: Number(id),
+      id: objectId,
       deletedAt: null,
     },
   })
@@ -133,16 +208,18 @@ export const updateObjectOfExpenditureService = async (id, data) => {
     throw new Error('Object of expenditure not found')
   }
 
-  /* CHECK DUPLICATES */
-  if (data.code || data.name) {
+  if (data.classificationId !== undefined && data.classificationId !== null) {
+    await ensureClassificationExists(data.classificationId)
+  }
 
+  if (data.code || data.name) {
     const duplicate = await db.objectOfExpenditure.findFirst({
       where: {
-        id: { not: Number(id) },
+        id: { not: objectId },
         deletedAt: null,
         OR: [
-          data.code ? { code: data.code.trim() } : undefined,
-          data.name ? { name: data.name.trim() } : undefined,
+          data.code ? { code: String(data.code).trim() } : undefined,
+          data.name ? { name: String(data.name).trim() } : undefined,
         ].filter(Boolean),
       },
     })
@@ -154,19 +231,18 @@ export const updateObjectOfExpenditureService = async (id, data) => {
 
   return db.objectOfExpenditure.update({
     where: {
-      id: Number(id),
+      id: objectId,
     },
     data: {
-      ...(data.code && { code: data.code.trim() }),
-      ...(data.name && { name: data.name.trim() }),
-
+      ...(data.code && { code: String(data.code).trim() }),
+      ...(data.name && { name: String(data.name).trim() }),
       ...(data.description !== undefined && {
         description: data.description?.trim() || null,
       }),
-
-      ...(data.classificationId && {
-        classificationId: Number(data.classificationId),
-      }),
+      ...(data.classificationId !== undefined &&
+        data.classificationId !== null && {
+          classificationId: Number(data.classificationId),
+        }),
     },
     include: {
       classification: true,
@@ -176,10 +252,11 @@ export const updateObjectOfExpenditureService = async (id, data) => {
 
 /* ================= DELETE (SOFT DELETE) ================= */
 export const deleteObjectOfExpenditureService = async (id) => {
+  const objectId = normalizePositiveInt(id, 'object id')
 
   const existing = await db.objectOfExpenditure.findFirst({
     where: {
-      id: Number(id),
+      id: objectId,
       deletedAt: null,
     },
   })
@@ -190,7 +267,7 @@ export const deleteObjectOfExpenditureService = async (id) => {
 
   return db.objectOfExpenditure.update({
     where: {
-      id: Number(id),
+      id: objectId,
     },
     data: {
       deletedAt: new Date(),

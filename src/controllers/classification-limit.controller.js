@@ -39,8 +39,11 @@ export const createClassificationLimit = async (req, res) => {
 ====================================================== */
 export const getClassificationLimits = async (req, res) => {
   try {
-    const { budgetId } = req.query;
-    const data = await getClassificationLimitsService(budgetId);
+    const { budgetId, category } = req.query;
+    const data = await getClassificationLimitsService(
+      budgetId,
+      category
+    );
 
     return res.status(200).json({
       success: true,
@@ -129,8 +132,10 @@ export const deleteClassificationLimit = async (req, res) => {
 ====================================================== */
 export const getLimitsByClassification = async (req, res) => {
   try {
+    const { category } = req.query;
     const data = await getLimitsByClassificationService(
-      req.params.classificationId
+      req.params.classificationId,
+      category
     );
 
     return res.status(200).json({

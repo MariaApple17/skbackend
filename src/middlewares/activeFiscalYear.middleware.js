@@ -5,10 +5,11 @@ import { db } from '../config/db.config.js';
 export const activeFiscalYear = async (req, res, next) => {
   try {
     const activeFY = await db.fiscalYear.findFirst({
-      where: { isActive: true },
+      where: {
+        isActive: true,
+        deletedAt: null,
+      },
     });
-
-    console.log('DEBUG ACTIVE FY:', activeFY);
 
     if (!activeFY) {
       return res.status(400).json({

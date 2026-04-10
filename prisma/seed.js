@@ -1,6 +1,10 @@
 import bcrypt from 'bcrypt'
-import { PrismaClient, UserStatus, BudgetCategory } from '@prisma/client'
+import { PrismaClient, UserStatus } from '@prisma/client'
 import { PERMISSIONS } from '../src/constants/permission.constant.js'
+import {
+  BUDGET_REFERENCE_CLASSIFICATIONS,
+  BUDGET_REFERENCE_OBJECTS_OF_EXPENDITURE,
+} from '../src/constants/budget-reference.constant.js'
 
 const prisma = new PrismaClient()
 
@@ -114,66 +118,57 @@ async function main() {
    6. BUDGET CLASSIFICATIONS
   ===================================================== */
 
-  const mooe = await prisma.budgetClassification.upsert({
-    where: { code: 'MOOE' },
-    update: {
-      name: 'Maintenance and Other Operating Expenses',
-      description: 'Common operating expenses',
-      allowedCategories: [
-        BudgetCategory.ADMINISTRATIVE,
-        BudgetCategory.YOUTH,
-      ],
-    },
-    create: {
-      code: 'MOOE',
-      name: 'Maintenance and Other Operating Expenses',
-      description: 'Common operating expenses',
-      allowedCategories: [
-        BudgetCategory.ADMINISTRATIVE,
-        BudgetCategory.YOUTH,
-      ],
-    },
-  })
+  const classificationsByReferenceId = new Map()
 
-  const ps = await prisma.budgetClassification.upsert({
-    where: { code: 'PS' },
-    update: {
-      name: 'Personal Services',
-      description: 'Compensation and personnel costs',
-      allowedCategories: [
-        BudgetCategory.ADMINISTRATIVE,
-      ],
-    },
-    create: {
-      code: 'PS',
-      name: 'Personal Services',
-      description: 'Compensation and personnel costs',
-      allowedCategories: [
-        BudgetCategory.ADMINISTRATIVE,
-      ],
-    },
-  })
+  for (const classification of BUDGET_REFERENCE_CLASSIFICATIONS) {
+    const record = await prisma.budgetClassification.upsert({
+      where: { code: classification.code },
+      update: {
+        name: classification.name,
+        description: classification.description,
+        allowedCategories: classification.allowedCategories,
+      },
+      create: {
+        code: classification.code,
+        name: classification.name,
+        description: classification.description,
+        allowedCategories: classification.allowedCategories,
+      },
+    })
+
+    classificationsByReferenceId.set(classification.id, record)
+  }
 
   /* =====================================================
    7. OBJECTS OF EXPENDITURE
   ===================================================== */
 
-  await prisma.objectOfExpenditure.upsert({
-    where: { code: 'OOE-001' },
-    update: {
-      name: 'Office Supplies',
-      description: 'Expenses for office materials',
-      classificationId: mooe.id,
-    },
-    create: {
-      code: 'OOE-001',
-      name: 'Office Supplies',
-      description: 'Expenses for office materials',
-      classification: {
-        connect: { id: mooe.id },
+  for (const object of BUDGET_REFERENCE_OBJECTS_OF_EXPENDITURE) {
+    const classification = classificationsByReferenceId.get(
+      object.classificationId
+    )
+
+    if (!classification) {
+      throw new Error(
+        `Missing classification mapping for object ${object.code}`
+      )
+    }
+
+    await prisma.objectOfExpenditure.upsert({
+      where: { code: object.code },
+      update: {
+        name: object.name,
+        classificationId: classification.id,
       },
-    },
-  })
+      create: {
+        code: object.code,
+        name: object.name,
+        classification: {
+          connect: { id: classification.id },
+        },
+      },
+    })
+  }
 
   console.log('✅ Seed completed successfully')
 

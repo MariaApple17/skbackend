@@ -13,7 +13,10 @@ uploadProgramProof
 } from "../controllers/program.controller.js"
 
 import { authMiddleware } from "../middlewares/auth.middleware.js"
-import { uploadProgramImage } from "../middlewares/upload.middleware.js"
+import {
+uploadProgramImage,
+uploadProofFile
+} from "../middlewares/upload.middleware.js"
 
 const router = express.Router()
 
@@ -35,7 +38,7 @@ createProgram
 router.post(
 "/:id/upload-proof",
 authMiddleware,
-uploadProgramImage.single("file"),
+uploadProofFile.single("proof"),
 uploadProgramProof
 )
 /* ======================================================
