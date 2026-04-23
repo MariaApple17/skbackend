@@ -72,7 +72,7 @@ npm install
 ### 3️⃣ Environment Variables
 #DATABASE_URL="mysql://root@localhost:3306/sk_system_db" 
 
-DATABASE_URL='postgresql://neondb_owner:npg_7whP0XJMQVrm@ep-red-dream-ahl1t49k-pooler.c-3.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require'
+DATABASE_URL="postgresql://sk_user:sk_password@localhost:5432/sk_system?schema=public"
 PORT=3001
 NODE_ENV=development
 

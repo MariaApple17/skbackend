@@ -573,6 +573,17 @@ export const getBudgetAllocationById = async (id) => {
       program: true,
       classification: true,
       object: true,
+      requests: {
+        where: { deletedAt: null },
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          title: true,
+          amount: true,
+          status: true,
+          createdAt: true,
+        },
+      },
     },
   });
 
